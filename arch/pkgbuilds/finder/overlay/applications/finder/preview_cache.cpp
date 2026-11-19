@@ -188,6 +188,16 @@ std::string urlEncodePath(const std::string& path) {
     return escaped.str();
 }
 
+static std::string shellEscape(const std::string& s) {
+    std::string out = "'";
+    for (char c : s) {
+        if (c == '\'') out += "'\\''";
+        else out += c;
+    }
+    out += "'";
+    return out;
+}
+
 std::shared_ptr<ImageData> loadOrGenerateThumbnail(const std::string& path, int pixels) {
     std::error_code ec;
     std::string canonical = fs::canonical(path, ec).string();
@@ -218,24 +228,41 @@ std::shared_ptr<ImageData> loadOrGenerateThumbnail(const std::string& path, int 
 
     fs::create_directories(thumbDir + "/large", ec);
 
+    std::string escCan = shellEscape(canonical);
+    std::string escL = shellEscape(l);
+
     if (ext == "mp4" || ext == "mkv" || ext == "mov" || ext == "avi" || ext == "webm" ||
-        ext == "flv" || ext == "wmv" || ext == "m4v" || ext == "mpg" || ext == "mpeg") {
-        std::string cmd = "ffmpeg -y -ss 00:00:01 -i \"" + canonical + "\" -vframes 1 -vf \"scale=256:256:force_original_aspect_ratio=decrease\" \"" + l + "\" >/dev/null 2>&1";
-        if (std::system(cmd.c_str()) == 0 && fs::exists(l, ec)) {
+        ext == "flv" || ext == "wmv" || ext == "m4v" || ext == "mpg" || ext == "mpeg" ||
+        ext == "ts" || ext == "3gp" || ext == "ogv") {
+        std::string cmd = "ffmpeg -y -ss 00:00:01 -i " + escCan + " -vframes 1 -vf \"scale=256:256:force_original_aspect_ratio=decrease\" " + escL + " >/dev/null 2>&1";
+        if (std::system(cmd.c_str()) != 0 || !fs::exists(l, ec)) {
+            // Fallback for short videos (< 1s)
+            cmd = "ffmpeg -y -ss 00:00:00 -i " + escCan + " -vframes 1 -vf \"scale=256:256:force_original_aspect_ratio=decrease\" " + escL + " >/dev/null 2>&1";
+            (void)std::system(cmd.c_str());
+        }
+        if (fs::exists(l, ec)) {
             return ImageData::load(l, pixels);
         }
     } else if (ext == "pdf") {
         std::string tmpPrefix = "/tmp/finder_p_" + hash;
-        std::string cmd = "pdftoppm -png -r 100 -f 1 -l 1 -scale-to 256 \"" + canonical + "\" \"" + tmpPrefix + "\" >/dev/null 2>&1";
-        if (std::system(cmd.c_str()) == 0) {
-            std::string gen = tmpPrefix + "-1.png";
-            if (fs::exists(gen, ec)) {
-                fs::rename(gen, l, ec);
-                return ImageData::load(l, pixels);
+        std::string escPrefix = shellEscape(tmpPrefix);
+        std::string cmd = "pdftoppm -png -r 100 -f 1 -l 1 -scale-to 256 " + escCan + " " + escPrefix + " >/dev/null 2>&1";
+        (void)std::system(cmd.c_str());
+
+        std::string foundGen;
+        for (const auto& suffix : {"-1.png", "-01.png", "-001.png", "-0001.png", "-00001.png"}) {
+            std::string candidate = tmpPrefix + suffix;
+            if (fs::exists(candidate, ec)) {
+                foundGen = candidate;
+                break;
             }
         }
+        if (!foundGen.empty()) {
+            fs::rename(foundGen, l, ec);
+            return ImageData::load(l, pixels);
+        }
     } else if (ext == "svg") {
-        std::string cmd = "rsvg-convert -w 256 -h 256 -a -o \"" + l + "\" \"" + canonical + "\" >/dev/null 2>&1";
+        std::string cmd = "rsvg-convert -w 256 -h 256 -a -o " + escL + " " + escCan + " >/dev/null 2>&1";
         if (std::system(cmd.c_str()) == 0 && fs::exists(l, ec)) {
             return ImageData::load(l, pixels);
         }
@@ -265,8 +292,11 @@ PreviewCache::~PreviewCache() {
 const Preview* PreviewCache::get(const FileEntry& e, float pixels) {
     if (e.isDir) return nullptr;
     const bool isImg = isImageExtension(e.ext) && e.size > 0 && e.size <= kMaxImageFile;
-    const bool isVid = e.kind == FileKind::Video && e.size > 0;
-    const bool isPdf = e.kind == FileKind::Pdf && e.size > 0;
+    const bool isVid = (e.kind == FileKind::Video || e.ext == "mp4" || e.ext == "mkv" || e.ext == "webm" ||
+                        e.ext == "mov" || e.ext == "avi" || e.ext == "wmv" || e.ext == "flv" ||
+                        e.ext == "m4v" || e.ext == "mpg" || e.ext == "mpeg" || e.ext == "ts" ||
+                        e.ext == "3gp" || e.ext == "ogv") && e.size > 0;
+    const bool isPdf = (e.kind == FileKind::Pdf || e.ext == "pdf") && e.size > 0;
     const bool isSvg = (e.ext == "svg" || e.ext == "SVG") && e.size > 0;
     const bool image = isImg || isVid || isPdf || isSvg;
     const bool text = !image && pixels >= 40 && isTextLike(e) && e.size > 0;  // too small to show lines

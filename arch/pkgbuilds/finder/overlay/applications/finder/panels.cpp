@@ -179,21 +179,39 @@ void OperationProgressPanel::drawPanel(Painter& p) {
 namespace {
 constexpr float kHeader = 44;
 constexpr float kTextLine = 17;
+
+static std::string shellEscape(const std::string& s) {
+    std::string out = "'";
+    for (char c : s) {
+        if (c == '\'') out += "'\\''";
+        else out += c;
+    }
+    out += "'";
+    return out;
+}
 }  // namespace
 
 QuickLookView::QuickLookView(std::shared_ptr<Browser> browser)
     : CenteredPanel(Material::Popover), m_browser(std::move(browser)) {}
 
-QuickLookView::~QuickLookView() {
+void QuickLookView::willDismiss() {
     if (m_player) {
+        m_player->pause();
         m_player->close();
         m_player.reset();
     }
+    m_videoTexture.reset();
+    m_shownFrame = {};
     if (!m_pdfTempDir.empty()) {
         std::error_code ec;
         fs::remove_all(m_pdfTempDir, ec);
         m_pdfTempDir.clear();
     }
+    m_pdfPages.clear();
+}
+
+QuickLookView::~QuickLookView() {
+    willDismiss();
 }
 
 void QuickLookView::setEntry(const FileEntry& e) {
@@ -243,7 +261,7 @@ void QuickLookView::setEntry(const FileEntry& e) {
                 if (!weak.lock() || m_entry.path != path) return;
                 if (m_pdfPages.empty() && img) {
                     m_pdfPages.push_back(img);
-                    invalidateLayout();
+                    invalidate();
                 }
             });
         }
@@ -254,28 +272,34 @@ void QuickLookView::setEntry(const FileEntry& e) {
             std::string tempDir = m_pdfTempDir;
             std::weak_ptr<Widget> weak = weak_from_this();
             std::thread([this, weak, pdfPath, tempDir] {
-                std::string cmd = "pdftoppm -png -r 140 -f 1 -l 40 \"" + pdfPath + "\" \"" + tempDir + "/p\" 2>/dev/null";
+                std::string escPdf = shellEscape(pdfPath);
+                std::string escOut = shellEscape(tempDir + "/p");
+                std::string cmd = "pdftoppm -png -r 140 -f 1 -l 100 " + escPdf + " " + escOut + " 2>/dev/null";
                 (void)std::system(cmd.c_str());
 
-                std::vector<std::string> pagePaths;
-                for (int page = 1; page <= 40; ++page) {
-                    char buf[64];
-                    std::snprintf(buf, sizeof(buf), "%s/p-%d.png", tempDir.c_str(), page);
-                    std::string p1 = buf;
-                    std::snprintf(buf, sizeof(buf), "%s/p-%02d.png", tempDir.c_str(), page);
-                    std::string p2 = buf;
-                    std::snprintf(buf, sizeof(buf), "%s/p-%03d.png", tempDir.c_str(), page);
-                    std::string p3 = buf;
-                    std::error_code ec;
-                    if (fs::exists(p1, ec)) pagePaths.push_back(p1);
-                    else if (fs::exists(p2, ec)) pagePaths.push_back(p2);
-                    else if (fs::exists(p3, ec)) pagePaths.push_back(p3);
-                    else break;
+                std::vector<std::pair<int, std::string>> pagesWithNum;
+                std::error_code ec;
+                for (const auto& entry : fs::directory_iterator(tempDir, ec)) {
+                    if (entry.is_regular_file(ec)) {
+                        std::string fn = entry.path().filename().string();
+                        if (fn.rfind("p-", 0) == 0 && fn.ends_with(".png")) {
+                            std::string numStr = fn.substr(2, fn.size() - 6);
+                            try {
+                                int pNum = std::stoi(numStr);
+                                pagesWithNum.emplace_back(pNum, entry.path().string());
+                            } catch (...) {}
+                        }
+                    }
                 }
+                std::sort(pagesWithNum.begin(), pagesWithNum.end(), [](const auto& a, const auto& b) {
+                    return a.first < b.first;
+                });
 
                 std::vector<std::shared_ptr<ImageData>> loaded;
-                for (const auto& pp : pagePaths) {
-                    if (auto img = ImageData::load(pp)) loaded.push_back(img);
+                for (const auto& item : pagesWithNum) {
+                    if (auto img = ImageData::load(item.second)) {
+                        loaded.push_back(img);
+                    }
                 }
 
                 if (!loaded.empty()) {
@@ -283,6 +307,7 @@ void QuickLookView::setEntry(const FileEntry& e) {
                         if (!weak.lock() || m_entry.path != pdfPath) return;
                         m_pdfPages = std::move(loaded);
                         invalidateLayout();
+                        invalidate();
                     });
                 }
             }).detach();
@@ -568,6 +593,29 @@ bool QuickLookView::onKeyDown(const KeyEvent& e) {
         invalidate();
         return true;
     }
+    if (m_isPdf) {
+        if (e.key == Key::Up || e.key == Key::Down || e.key == Key::PageUp || e.key == Key::PageDown) {
+            float delta = (e.key == Key::Up) ? -80.0f :
+                          (e.key == Key::Down) ? 80.0f :
+                          (e.key == Key::PageUp) ? -(body().height - 40.0f) : (body().height - 40.0f);
+            float totalH = 20.0f;
+            float availableW = std::max(100.0f, body().width - 40.0f);
+            for (const auto& pageImg : m_pdfPages) {
+                if (!pageImg) continue;
+                float pw = static_cast<float>(pageImg->width());
+                float ph = static_cast<float>(pageImg->height());
+                if (pw > 0 && ph > 0) {
+                    float scale = std::min(availableW / pw, 1.0f);
+                    totalH += ph * scale + 20.0f;
+                }
+            }
+            float maxScroll = std::max(0.0f, totalH - body().height + 40.0f);
+            m_scroll = std::clamp(m_scroll + delta, 0.0f, maxScroll);
+            m_physics.setOffset({0, m_scroll});
+            invalidate();
+            return true;
+        }
+    }
     if (e.key == Key::Left || e.key == Key::Right || e.key == Key::Up || e.key == Key::Down) {
         if (onArrow) onArrow(e.key);
         return true;
@@ -632,12 +680,12 @@ void QuickLookView::onPointerMove(const PointerEvent& e) {
 
 bool QuickLookView::onScroll(const ScrollEvent& e) {
     if (m_isPdf) {
-        float totalH = 0;
-        float availableW = body().width - 40.0f;
+        float totalH = 20.0f;
+        float availableW = std::max(100.0f, body().width - 40.0f);
         for (const auto& pageImg : m_pdfPages) {
             if (!pageImg) continue;
-            float pw = static_cast<float>(pageImg->originalWidth());
-            float ph = static_cast<float>(pageImg->originalHeight());
+            float pw = static_cast<float>(pageImg->width());
+            float ph = static_cast<float>(pageImg->height());
             if (pw > 0 && ph > 0) {
                 float scale = std::min(availableW / pw, 1.0f);
                 totalH += ph * scale + 20.0f;

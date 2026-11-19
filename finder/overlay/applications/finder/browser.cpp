@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <mayonnaise/widgets/sidebar.hpp>
 
 #include "file_icons.hpp"
 
+namespace fs = std::filesystem;
 using namespace mayo;
 
 namespace finder {
@@ -421,6 +424,14 @@ void FileView::updateDrag(Point p) {
             folder = target->dropFolderAt(p);
             break;
         }
+        if (auto* sb = dynamic_cast<SidebarView*>(w)) {
+            std::string id = sb->itemIdAt(p);
+            std::error_code ec;
+            if (!id.empty() && fs::is_directory(id, ec)) {
+                folder = id;
+                break;
+            }
+        }
     }
     // Never into one of the dragged folders (or below it).
     for (const auto& src : m_dragPaths) {
@@ -429,6 +440,51 @@ void FileView::updateDrag(Point p) {
     if (folder != m_browser->dropHover) {
         m_browser->dropHover = folder;
         if (auto* h = host()) h->requestRedraw();
+    }
+
+    // Spring-loaded navigation over sidebar folders and back/forward toolbar buttons
+    static std::string s_hoverTarget;
+    static double s_hoverStart = 0;
+    static double s_cooldownUntil = 0;
+
+    Widget* hit = windowRoot()->hitTest(p);
+    std::string currentTarget = folder;
+    bool isNav = false;
+    if (hit) {
+        std::string tt = hit->tooltip();
+        if (tt.find("Back") != std::string::npos || tt.find("Atrás") != std::string::npos ||
+            tt.find("Indietro") != std::string::npos || tt.find("Précédent") != std::string::npos) {
+            currentTarget = "__BACK__";
+            isNav = true;
+        } else if (tt.find("Forward") != std::string::npos || tt.find("Adelante") != std::string::npos ||
+                   tt.find("Avanti") != std::string::npos || tt.find("Suivant") != std::string::npos) {
+            currentTarget = "__FORWARD__";
+            isNav = true;
+        }
+    }
+
+    double currentTime = now();
+    if (currentTime >= s_cooldownUntil && !currentTarget.empty() && (currentTarget != m_browser->path || isNav)) {
+        if (currentTarget == s_hoverTarget) {
+            if (currentTime - s_hoverStart >= 0.55) {
+                if (currentTarget == "__BACK__") {
+                    if (m_browser->goBack) m_browser->goBack();
+                } else if (currentTarget == "__FORWARD__") {
+                    if (m_browser->goForward) m_browser->goForward();
+                } else {
+                    if (m_browser->navigate) m_browser->navigate(currentTarget, "");
+                }
+                s_hoverTarget.clear();
+                s_hoverStart = 0;
+                s_cooldownUntil = currentTime + 0.8;
+            }
+        } else {
+            s_hoverTarget = currentTarget;
+            s_hoverStart = currentTime;
+        }
+    } else if (currentTarget.empty() || currentTarget == m_browser->path) {
+        s_hoverTarget.clear();
+        s_hoverStart = 0;
     }
 }
 

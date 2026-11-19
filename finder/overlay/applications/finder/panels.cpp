@@ -179,21 +179,39 @@ void OperationProgressPanel::drawPanel(Painter& p) {
 namespace {
 constexpr float kHeader = 44;
 constexpr float kTextLine = 17;
+
+static std::string shellEscape(const std::string& s) {
+    std::string out = "'";
+    for (char c : s) {
+        if (c == '\'') out += "'\\''";
+        else out += c;
+    }
+    out += "'";
+    return out;
+}
 }  // namespace
 
 QuickLookView::QuickLookView(std::shared_ptr<Browser> browser)
     : CenteredPanel(Material::Popover), m_browser(std::move(browser)) {}
 
-QuickLookView::~QuickLookView() {
+void QuickLookView::willDismiss() {
     if (m_player) {
+        m_player->pause();
         m_player->close();
         m_player.reset();
     }
+    m_videoTexture.reset();
+    m_shownFrame = {};
     if (!m_pdfTempDir.empty()) {
         std::error_code ec;
         fs::remove_all(m_pdfTempDir, ec);
         m_pdfTempDir.clear();
     }
+    m_pdfPages.clear();
+}
+
+QuickLookView::~QuickLookView() {
+    willDismiss();
 }
 
 void QuickLookView::setEntry(const FileEntry& e) {
@@ -235,14 +253,6 @@ void QuickLookView::setEntry(const FileEntry& e) {
         if (m_player->open(e.path, err)) {
             m_player->play();
         }
-        if (m_browser->previews) {
-            std::weak_ptr<Widget> weak = weak_from_this();
-            m_browser->previews->loadLarge(e.path, 1920, [this, weak, path = e.path](std::shared_ptr<ImageData> img) {
-                if (!weak.lock() || m_entry.path != path) return;
-                m_image = std::move(img);
-                invalidateLayout();
-            });
-        }
     } else if (e.kind == FileKind::Pdf) {
         m_isPdf = true;
         if (m_browser->previews) {
@@ -251,7 +261,7 @@ void QuickLookView::setEntry(const FileEntry& e) {
                 if (!weak.lock() || m_entry.path != path) return;
                 if (m_pdfPages.empty() && img) {
                     m_pdfPages.push_back(img);
-                    invalidateLayout();
+                    invalidate();
                 }
             });
         }
@@ -262,28 +272,34 @@ void QuickLookView::setEntry(const FileEntry& e) {
             std::string tempDir = m_pdfTempDir;
             std::weak_ptr<Widget> weak = weak_from_this();
             std::thread([this, weak, pdfPath, tempDir] {
-                std::string cmd = "pdftoppm -png -r 140 -f 1 -l 40 \"" + pdfPath + "\" \"" + tempDir + "/p\" 2>/dev/null";
+                std::string escPdf = shellEscape(pdfPath);
+                std::string escOut = shellEscape(tempDir + "/p");
+                std::string cmd = "pdftoppm -png -r 140 -f 1 -l 100 " + escPdf + " " + escOut + " 2>/dev/null";
                 (void)std::system(cmd.c_str());
 
-                std::vector<std::string> pagePaths;
-                for (int page = 1; page <= 40; ++page) {
-                    char buf[64];
-                    std::snprintf(buf, sizeof(buf), "%s/p-%d.png", tempDir.c_str(), page);
-                    std::string p1 = buf;
-                    std::snprintf(buf, sizeof(buf), "%s/p-%02d.png", tempDir.c_str(), page);
-                    std::string p2 = buf;
-                    std::snprintf(buf, sizeof(buf), "%s/p-%03d.png", tempDir.c_str(), page);
-                    std::string p3 = buf;
-                    std::error_code ec;
-                    if (fs::exists(p1, ec)) pagePaths.push_back(p1);
-                    else if (fs::exists(p2, ec)) pagePaths.push_back(p2);
-                    else if (fs::exists(p3, ec)) pagePaths.push_back(p3);
-                    else break;
+                std::vector<std::pair<int, std::string>> pagesWithNum;
+                std::error_code ec;
+                for (const auto& entry : fs::directory_iterator(tempDir, ec)) {
+                    if (entry.is_regular_file(ec)) {
+                        std::string fn = entry.path().filename().string();
+                        if (fn.rfind("p-", 0) == 0 && fn.ends_with(".png")) {
+                            std::string numStr = fn.substr(2, fn.size() - 6);
+                            try {
+                                int pNum = std::stoi(numStr);
+                                pagesWithNum.emplace_back(pNum, entry.path().string());
+                            } catch (...) {}
+                        }
+                    }
                 }
+                std::sort(pagesWithNum.begin(), pagesWithNum.end(), [](const auto& a, const auto& b) {
+                    return a.first < b.first;
+                });
 
                 std::vector<std::shared_ptr<ImageData>> loaded;
-                for (const auto& pp : pagePaths) {
-                    if (auto img = ImageData::load(pp)) loaded.push_back(img);
+                for (const auto& item : pagesWithNum) {
+                    if (auto img = ImageData::load(item.second)) {
+                        loaded.push_back(img);
+                    }
                 }
 
                 if (!loaded.empty()) {
@@ -291,6 +307,7 @@ void QuickLookView::setEntry(const FileEntry& e) {
                         if (!weak.lock() || m_entry.path != pdfPath) return;
                         m_pdfPages = std::move(loaded);
                         invalidateLayout();
+                        invalidate();
                     });
                 }
             }).detach();
@@ -412,22 +429,43 @@ void QuickLookView::drawPanel(Painter& p) {
             p.drawImage(pic, *m_image);
         }
 
-        // Floating Liquid Glass video HUD controls
-        Rect hudRect{b.center().x - 170.0f, b.bottom() - 48.0f, 340.0f, 36.0f};
-        p.drawShadow(hudRect, 18.0f, Color::black(0.4f), 12.0f, {0, 4});
-        p.fillVerticalGradient(hudRect, 18.0f, Color::white(0.24f), Color::white(0.08f));
-        p.strokeRoundedRect(hudRect, 18.0f, Color::white(0.30f), 0.75f);
-        p.strokeRoundedRect({hudRect.x + 0.5f, hudRect.y + 0.5f, hudRect.width - 1.0f, 1.0f}, 0.5f, Color::white(0.5f), 1.0f);
+        // Floating Liquid Glass video HUD controls (QuickTime Player design)
+        const float hudW = 400.0f;
+        const float hudH = 46.0f;
+        const float hudR = 23.0f;
+        Rect hudRect{b.center().x - hudW * 0.5f, b.bottom() - 56.0f, hudW, hudH};
+        p.drawShadow(hudRect, hudR, Color::black(0.45f), 24.0f, {0, 8});
+        MaterialStyle ms = t.material(Material::Popover);
+        ms.tint = Color::rgb8(28, 28, 32, 0.70f);
+        ms.highlight = Color::white(0.20f);
+        ms.border = Color::white(0.12f);
+        p.drawMaterial(hudRect, hudR, ms);
 
-        // Play/Pause button
-        Icon playIcon = m_videoPaused ? Icon::Play : Icon::Pause;
-        Rect playBtn{hudRect.x + 12.0f, hudRect.center().y - 8.0f, 16.0f, 16.0f};
-        p.drawIcon(playIcon, playBtn, Color::white(), 1.2f);
-
-        // Scrub track
         double pos = m_player ? m_player->position() : 0;
         double dur = m_player ? m_player->duration() : 0;
-        Rect track{hudRect.x + 38.0f, hudRect.center().y - 2.5f, 205.0f, 5.0f};
+
+        // Skip back (-10s) button
+        Rect backBtn{hudRect.x + 14.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
+        p.drawIcon(Icon::ChevronLeft, backBtn.inset(3.0f), Color::white(0.9f), 1.5f);
+
+        // Play / Pause button
+        Icon playIcon = m_videoPaused ? Icon::Play : Icon::Pause;
+        Rect playBtn{hudRect.x + 44.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
+        p.drawIcon(playIcon, playBtn.inset(4.0f), Color::white(), 1.4f);
+
+        // Skip forward (+10s) button
+        Rect fwdBtn{hudRect.x + 78.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
+        p.drawIcon(Icon::ChevronRight, fwdBtn.inset(3.0f), Color::white(0.9f), 1.5f);
+
+        // Elapsed time
+        int pMin = static_cast<int>(pos) / 60, pSec = static_cast<int>(pos) % 60;
+        char elapsedBuf[16];
+        std::snprintf(elapsedBuf, sizeof(elapsedBuf), "%d:%02d", pMin, pSec);
+        Rect elapsedRect{hudRect.x + 108.0f, hudRect.center().y - 8.0f, 40.0f, 16.0f};
+        p.drawText(elapsedBuf, elapsedRect, t.font(TextStyle::Caption), Color::white(0.85f), TextAlign::Center);
+
+        // TrackBar timeline
+        Rect track{hudRect.x + 152.0f, hudRect.center().y - 2.5f, 180.0f, 5.0f};
         p.fillRoundedRect(track, 2.5f, Color::white(0.22f));
         if (dur > 0) {
             float progress = static_cast<float>(pos / dur);
@@ -437,14 +475,17 @@ void QuickLookView::drawPanel(Painter& p) {
             p.fillCircle(knob, 5.5f, Color::white());
         }
 
-        // Time text
-        int pMin = static_cast<int>(pos) / 60, pSec = static_cast<int>(pos) % 60;
-        int dMin = static_cast<int>(dur) / 60, dSec = static_cast<int>(dur) % 60;
-        char timeBuf[32];
-        std::snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d / %02d:%02d", pMin, pSec, dMin, dSec);
-        p.drawText(timeBuf, {hudRect.right() - 86.0f, hudRect.y, 80.0f, hudRect.height}, t.font(TextStyle::Caption), Color::white(), TextAlign::Trailing);
+        // Remaining time
+        int remSec = std::max(0, static_cast<int>(dur - pos));
+        int rMin = remSec / 60, rSec = remSec % 60;
+        char remBuf[16];
+        std::snprintf(remBuf, sizeof(remBuf), "-%d:%02d", rMin, rSec);
+        Rect remRect{hudRect.right() - 56.0f, hudRect.center().y - 8.0f, 44.0f, 16.0f};
+        p.drawText(remBuf, remRect, t.font(TextStyle::Caption), Color::white(0.85f), TextAlign::Leading);
 
-        requestAnimationFrame();
+        if (m_player && m_player->isPlaying()) {
+            requestAnimationFrame();
+        }
     } else if (m_isPdf) {
         if (m_physics.isAnimating()) {
             if (m_physics.step(now())) requestAnimationFrame();
@@ -461,8 +502,8 @@ void QuickLookView::drawPanel(Painter& p) {
             for (const auto& pageImg : m_pdfPages) {
                 ++pageIdx;
                 if (!pageImg) continue;
-                float pw = static_cast<float>(pageImg->originalWidth());
-                float ph = static_cast<float>(pageImg->originalHeight());
+                float pw = static_cast<float>(pageImg->width());
+                float ph = static_cast<float>(pageImg->height());
                 if (pw <= 0 || ph <= 0) continue;
                 float scale = std::min(availableW / pw, 1.0f);
                 float renderW = pw * scale;
@@ -552,6 +593,29 @@ bool QuickLookView::onKeyDown(const KeyEvent& e) {
         invalidate();
         return true;
     }
+    if (m_isPdf) {
+        if (e.key == Key::Up || e.key == Key::Down || e.key == Key::PageUp || e.key == Key::PageDown) {
+            float delta = (e.key == Key::Up) ? -80.0f :
+                          (e.key == Key::Down) ? 80.0f :
+                          (e.key == Key::PageUp) ? -(body().height - 40.0f) : (body().height - 40.0f);
+            float totalH = 20.0f;
+            float availableW = std::max(100.0f, body().width - 40.0f);
+            for (const auto& pageImg : m_pdfPages) {
+                if (!pageImg) continue;
+                float pw = static_cast<float>(pageImg->width());
+                float ph = static_cast<float>(pageImg->height());
+                if (pw > 0 && ph > 0) {
+                    float scale = std::min(availableW / pw, 1.0f);
+                    totalH += ph * scale + 20.0f;
+                }
+            }
+            float maxScroll = std::max(0.0f, totalH - body().height + 40.0f);
+            m_scroll = std::clamp(m_scroll + delta, 0.0f, maxScroll);
+            m_physics.setOffset({0, m_scroll});
+            invalidate();
+            return true;
+        }
+    }
     if (e.key == Key::Left || e.key == Key::Right || e.key == Key::Up || e.key == Key::Down) {
         if (onArrow) onArrow(e.key);
         return true;
@@ -574,12 +638,30 @@ bool QuickLookView::onPointerDown(const PointerEvent& e) {
         return true;
     }
     if (m_isVideo) {
-        Rect hudRect{body().center().x - 170.0f, body().bottom() - 48.0f, 340.0f, 36.0f};
+        const float hudW = 400.0f;
+        const float hudH = 46.0f;
+        Rect hudRect{body().center().x - hudW * 0.5f, body().bottom() - 56.0f, hudW, hudH};
         if (hudRect.contains(e.position)) {
-            m_videoPaused = !m_videoPaused;
-            if (m_player) {
-                if (m_videoPaused) m_player->pause();
-                else m_player->play();
+            Rect backBtn{hudRect.x + 14.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
+            Rect playBtn{hudRect.x + 44.0f, hudRect.center().y - 14.0f, 28.0f, 28.0f};
+            Rect fwdBtn{hudRect.x + 78.0f, hudRect.center().y - 12.0f, 24.0f, 24.0f};
+            Rect track{hudRect.x + 152.0f, hudRect.center().y - 10.0f, 180.0f, 20.0f};
+
+            if (playBtn.contains(e.position)) {
+                m_videoPaused = !m_videoPaused;
+                if (m_player) {
+                    if (m_videoPaused) m_player->pause();
+                    else m_player->play();
+                }
+            } else if (backBtn.contains(e.position)) {
+                if (m_player) m_player->seek(std::max(0.0, m_player->position() - 10.0));
+            } else if (fwdBtn.contains(e.position)) {
+                if (m_player) m_player->seek(std::min(m_player->duration(), m_player->position() + 10.0));
+            } else if (track.contains(e.position)) {
+                if (m_player && m_player->duration() > 0) {
+                    float frac = std::clamp((e.position.x - track.x) / track.width, 0.0f, 1.0f);
+                    m_player->seek(frac * m_player->duration());
+                }
             }
             invalidate();
             return true;
@@ -598,12 +680,12 @@ void QuickLookView::onPointerMove(const PointerEvent& e) {
 
 bool QuickLookView::onScroll(const ScrollEvent& e) {
     if (m_isPdf) {
-        float totalH = 0;
-        float availableW = body().width - 40.0f;
+        float totalH = 20.0f;
+        float availableW = std::max(100.0f, body().width - 40.0f);
         for (const auto& pageImg : m_pdfPages) {
             if (!pageImg) continue;
-            float pw = static_cast<float>(pageImg->originalWidth());
-            float ph = static_cast<float>(pageImg->originalHeight());
+            float pw = static_cast<float>(pageImg->width());
+            float ph = static_cast<float>(pageImg->height());
             if (pw > 0 && ph > 0) {
                 float scale = std::min(availableW / pw, 1.0f);
                 totalH += ph * scale + 20.0f;

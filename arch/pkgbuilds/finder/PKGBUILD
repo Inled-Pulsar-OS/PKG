@@ -47,13 +47,26 @@ package() {
         "$pkgdir/etc/xdg/xdg-desktop-portal/portals.conf"
     cat << "EOF" > "$pkgdir/etc/xdg/xdg-desktop-portal/gnome-portals.conf"
 [preferred]
-default=gnome;gtk;
 org.freedesktop.impl.portal.FileChooser=finder;gnome;gtk;
+default=gnome;gtk;
 org.freedesktop.impl.portal.Secret=oo7-portal;gnome-keyring;
 EOF
     mkdir -p "$pkgdir/usr/share/xdg-desktop-portal"
     install -Dm644 /tmp/forma/applications/finder/portal/portals.conf \
         "$pkgdir/usr/share/xdg-desktop-portal/pulsar-portals.conf"
+    install -Dm644 "$pkgdir/etc/xdg/xdg-desktop-portal/gnome-portals.conf" \
+        "$pkgdir/usr/share/xdg-desktop-portal/gnome-portals.conf"
+
+    # Environment variables for GTK / Chrome / Electron to use portal file chooser
+    mkdir -p "$pkgdir/etc/profile.d"
+    cat << "EOF" > "$pkgdir/etc/profile.d/pulsar-portal.sh"
+#!/bin/sh
+export GTK_USE_PORTAL=1
+EOF
+    chmod 755 "$pkgdir/etc/profile.d/pulsar-portal.sh"
+
+    mkdir -p "$pkgdir/etc/environment.d"
+    echo "GTK_USE_PORTAL=1" > "$pkgdir/etc/environment.d/10-pulsar-portal.conf"
 
     # Systemd user service
     mkdir -p "$pkgdir/usr/lib/systemd/user"

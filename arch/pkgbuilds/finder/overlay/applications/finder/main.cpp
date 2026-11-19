@@ -51,7 +51,7 @@ constexpr float kStatusBarHeight = 26;
 /// status bar sit along the bottom.
 class FinderPage : public Widget {
 public:
-    std::shared_ptr<Widget> iconScroll, listHeader, listScroll, columnScroll, empty, bottom, pathBar, statusBar;
+    std::shared_ptr<Widget> iconScroll, listHeader, listScroll, columnScroll, empty, bottom, pathBar, statusBar, pickerBar;
     std::shared_ptr<Widget> menuAnchor = std::make_shared<Widget>();
     ViewMode mode = ViewMode::Icons;
 
@@ -84,14 +84,18 @@ public:
             p.fillRect(b, c.windowBackground);
             const float px = 1.0f / p.scale();
             p.fillRect({b.x, p.snap(b.y), b.width, px}, c.separator);
-            if (pathBar->isVisible() && statusBar->isVisible())
+            if (pathBar->isVisible() && ((pickerBar && pickerBar->isVisible()) || (statusBar && statusBar->isVisible())))
                 p.fillRect({b.x, p.snap(b.y + kPathBarHeight), b.width, px}, c.separator.multipliedAlpha(0.6f));
         }
         paintChildren(p);
     }
 
     [[nodiscard]] float bottomHeight() const {
-        return (pathBar->isVisible() ? kPathBarHeight : 0.0f) + (statusBar->isVisible() ? kStatusBarHeight : 0.0f);
+        float h = 0.0f;
+        if (pathBar && pathBar->isVisible()) h += kPathBarHeight;
+        if (pickerBar && pickerBar->isVisible()) h += 52.0f;
+        else if (statusBar && statusBar->isVisible()) h += kStatusBarHeight;
+        return h;
     }
 };
 
@@ -356,10 +360,10 @@ int main(int argc, char** argv) {
     auto statusBar = ZStack(
         {HStack({opSpinner, opLabel, cancelOperation, Spacer(), sizeSlider}).spacing(6).padding(0, 12), statusLabel});
     statusBar.height(kStatusBarHeight);
-    auto pickerCancel = Button(tr("Cancel")).style(ButtonStyle::Default).onClick([&] {
+    auto pickerCancel = Button(tr("Cancel")).minWidth(96).height(32).onClick([&] {
         std::exit(1);
     });
-    auto pickerFilenameField = TextField(tr("File name:")).width(220);
+    auto pickerFilenameField = TextField(tr("File name:")).width(260);
     if (!saveFilename.empty()) pickerFilenameField.setText(saveFilename);
     auto submitPicker = [&] {
         if (!pickerMode) return;
@@ -383,19 +387,27 @@ int main(int argc, char** argv) {
             std::exit(0);
         }
     };
-    auto pickerSelect = Button(saveMode ? tr("Save") : tr("Open")).style(ButtonStyle::Prominent).onClick(submitPicker);
+    auto pickerSelect = Button(saveMode ? tr("Save") : tr("Open"))
+                            .style(ButtonStyle::Prominent)
+                            .minWidth(96)
+                            .height(32)
+                            .onClick(submitPicker);
     HStack pickerBar;
     if (saveMode) {
         auto saveStack = HStack({Element(Label(tr("File name:"))), Element(pickerFilenameField.node())}).spacing(8);
-        pickerBar = HStack({Element(saveStack.node()), Element(Spacer().node()), Element(pickerCancel.node()), Element(pickerSelect.node())}).spacing(10).padding(6, 16);
+        pickerBar = HStack({Element(saveStack.node()), Element(Spacer().node()), Element(pickerCancel.node()), Element(pickerSelect.node())})
+                        .spacing(12)
+                        .padding(10, 20);
     } else {
-        pickerBar = HStack({Element(Spacer().node()), Element(pickerCancel.node()), Element(pickerSelect.node())}).spacing(10).padding(6, 16);
+        pickerBar = HStack({Element(Spacer().node()), Element(pickerCancel.node()), Element(pickerSelect.node())})
+                        .spacing(12)
+                        .padding(10, 20);
     }
-    pickerBar.height(44);
+    pickerBar.height(52);
 
     VStack bottom;
     if (pickerMode) {
-        bottom = VStack({Element(pathBar), Element(pickerBar.node()), statusBar}).spacing(0);
+        bottom = VStack({Element(pathBar), Element(pickerBar.node())}).spacing(0);
     } else {
         bottom = VStack({Element(pathBar), statusBar}).spacing(0);
     }
@@ -409,6 +421,7 @@ int main(int argc, char** argv) {
     page->bottom = bottom.node();
     page->pathBar = pathBar;
     page->statusBar = statusBar.node();
+    if (pickerMode) page->pickerBar = pickerBar.node();
     for (auto& w : {page->iconScroll, page->listHeader, page->listScroll, page->columnScroll, page->empty, page->bottom,
                     page->menuAnchor}) {
         page->addChild(w);

@@ -35,6 +35,8 @@ struct Browser {
     // Hooks implemented by the window controller.
     std::function<void(const FileEntry&)> open;
     std::function<void(const std::string& folder, const std::string& select)> navigate;
+    std::function<void()> goBack;
+    std::function<void()> goForward;
     std::function<void()> selectionChanged;
     std::function<void(mayo::Widget& from, mayo::Point at, bool onItem)> contextMenu;
     std::function<void(const std::string& path, const std::string& newName)> rename;
@@ -99,6 +101,7 @@ public:
     /// Starts editing the name of `path` in place.
     void beginRename(const std::string& path);
     [[nodiscard]] bool isRenaming() const { return m_rename != nullptr; }
+    [[nodiscard]] bool isRenamingPath(const std::string& path) const { return m_rename != nullptr && m_renamePath == path; }
     void setScroller(mayo::ScrollViewView* s, float revealInset = 0) {
         m_scroller = s;
         m_revealInset = revealInset;

@@ -87,6 +87,7 @@ public:
     bool onScroll(const mayo::ScrollEvent& e) override;
 
 protected:
+    void willDismiss() override;
     void drawPanel(mayo::Painter& p) override;
 
 private:

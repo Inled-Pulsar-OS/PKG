@@ -45,6 +45,8 @@ public:
     void trash(std::vector<std::string> paths, Done done = {});
     void putBack(std::vector<std::string> trashedPaths, Done done = {});
     void emptyTrash(Done done = {});
+    void compress(std::vector<std::string> sources, std::string destinationZip = {}, Done done = {});
+    void extract(std::vector<std::string> archives, std::string destinationFolder = {}, Done done = {});
     /// Permanent; only offered for items already in the Trash.
     void deleteImmediately(std::vector<std::string> paths, Done done = {});
     /// Synchronous (a rename is a single syscall); returns the new path or "" after reporting the error.
