@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+# Undo the tracker/localsearch mask when the package is removed. Upgrades keep it.
+case "$1" in
+    remove|purge)
+        for s in localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service \
+                 tracker-miner-fs-3.service tracker-extract-3.service tracker-miner-fs-control-3.service \
+                 tracker-miner-rss-3.service; do
+            link="/etc/systemd/user/$s"
+            if [ -L "$link" ] && [ "$(readlink "$link")" = "/dev/null" ]; then
+                rm -f "$link"
+            fi
+        done
+        ;;
+esac
+
+exit 0
