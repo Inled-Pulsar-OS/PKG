@@ -471,7 +471,7 @@ void FileView::updateDrag(Point p) {
                     if (m_browser->goBack) m_browser->goBack();
                 } else if (currentTarget == "__FORWARD__") {
                     if (m_browser->goForward) m_browser->goForward();
-                } else {
+                } else if (!m_browser->springLoad || !m_browser->springLoad(currentTarget)) {
                     if (m_browser->navigate) m_browser->navigate(currentTarget, "");
                 }
                 s_hoverTarget.clear();

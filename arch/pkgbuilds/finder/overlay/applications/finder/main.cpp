@@ -65,8 +65,10 @@ struct FinderTab {
     bool searching = false;
 };
 
-class TabBarView : public Widget {
+class TabBarView : public Widget, public DropTarget {
 public:
+    std::shared_ptr<Browser> browser;
+    App* app = nullptr;
     std::function<const std::vector<FinderTab>&()> getTabs;
     std::function<size_t()> getActiveTab;
     std::function<void(size_t index)> onSelectTab;
@@ -76,6 +78,49 @@ public:
     [[nodiscard]] bool expandsContent(Axis a) const override { return a == Axis::Horizontal; }
     [[nodiscard]] bool isInteractive() const override { return true; }
     Size measureContent(Size available) override { return {available.width, 30.0f}; }
+
+    std::string dropFolderAt(Point p) override {
+        int hoveredTab = -1;
+        for (const auto& lt : m_layout) {
+            if (lt.rect.contains(p)) {
+                hoveredTab = static_cast<int>(lt.index);
+                break;
+            }
+        }
+
+        if (hoveredTab < 0) {
+            m_springHoverTab = -1;
+            ++m_springGeneration;
+            return {};
+        }
+
+        if (!getTabs) return {};
+        const auto& tabs = getTabs();
+        if (hoveredTab >= static_cast<int>(tabs.size())) return {};
+
+        const auto& tab = tabs[static_cast<size_t>(hoveredTab)];
+
+        size_t curActive = getActiveTab ? getActiveTab() : 0;
+        if (static_cast<size_t>(hoveredTab) != curActive) {
+            if (hoveredTab != m_springHoverTab) {
+                m_springHoverTab = hoveredTab;
+                const int gen = ++m_springGeneration;
+                if (app) {
+                    app->after(0.40, [this, gen, hoveredTab] {
+                        if (gen == m_springGeneration && m_springHoverTab == hoveredTab) {
+                            if (onSelectTab) onSelectTab(static_cast<size_t>(hoveredTab));
+                            m_springHoverTab = -1;
+                        }
+                    });
+                }
+            }
+        } else {
+            m_springHoverTab = -1;
+            ++m_springGeneration;
+        }
+
+        return tab.path;
+    }
 
     void draw(Painter& p) override {
         const Theme& t = theme();
@@ -120,8 +165,12 @@ public:
             const bool isActive = (lt.index == active);
             const bool isHovered = (static_cast<int>(lt.index) == m_hoverTab);
             const auto& tab = tabs[lt.index];
+            const bool isDropHover = (browser && !browser->dropHover.empty() && browser->dropHover == tab.path);
 
-            if (isActive) {
+            if (isDropHover) {
+                p.fillRoundedRect(lt.rect, 5.0f, c.accent.withAlpha(0.28f));
+                p.strokeRoundedRect(lt.rect, 5.0f, c.accent, 2.0f);
+            } else if (isActive) {
                 p.fillRoundedRect(lt.rect, 5.0f, c.contentBackground);
                 p.strokeRoundedRect(lt.rect, 5.0f, c.separator.multipliedAlpha(0.6f), 1.0f);
             } else {
@@ -137,16 +186,16 @@ public:
             if (hoverClose) {
                 p.fillCircle(lt.closeRect.center(), 6.5f, c.hover);
             }
-            if (isActive || isHovered || hoverClose) {
+            if ((isActive || isHovered || hoverClose) && !isDropHover) {
                 p.drawIcon(Icon::Xmark, {lt.closeRect.x + 2, lt.closeRect.y + 2, 9, 9}, hoverClose ? c.label : c.secondaryLabel, 1.5f);
             }
 
             Icon tabIcon = tab.searching ? Icon::Magnifier : placeIcon(tab.path);
-            p.drawIcon(tabIcon, lt.iconRect, isActive ? c.accent : c.secondaryLabel);
+            p.drawIcon(tabIcon, lt.iconRect, (isDropHover || isActive) ? c.accent : c.secondaryLabel);
 
             std::string title = tab.title.empty() ? displayName(tab.path) : tab.title;
             std::string truncated = truncateEnd(p, title, font, lt.textRect.width);
-            p.drawText(truncated, lt.textRect, font, isActive ? c.label : c.secondaryLabel);
+            p.drawText(truncated, lt.textRect, font, (isDropHover || isActive) ? c.label : c.secondaryLabel);
         }
 
         if (m_hoverPlus) p.fillRoundedRect(m_plusRect, 4.0f, c.hover);
@@ -195,6 +244,8 @@ public:
         m_hoverTab = -1;
         m_hoverClose = -1;
         m_hoverPlus = false;
+        m_springHoverTab = -1;
+        ++m_springGeneration;
         invalidate();
     }
 
@@ -211,6 +262,8 @@ private:
     int m_hoverTab = -1;
     int m_hoverClose = -1;
     bool m_hoverPlus = false;
+    int m_springHoverTab = -1;
+    int m_springGeneration = 0;
 };
 
 /// Detail area. Icons scroll under the toolbar glass; list and columns start below it. Path bar and
@@ -469,6 +522,8 @@ int main(int argc, char** argv) {
     std::vector<FinderTab> tabs;
     size_t activeTab = 0;
     auto tabBar = std::make_shared<TabBarView>();
+    tabBar->browser = browser;
+    tabBar->app = &app;
     tabBar->setHidden(true);
     tabBar->getTabs = [&]() -> const std::vector<FinderTab>& { return tabs; };
     tabBar->getActiveTab = [&]() -> size_t { return activeTab; };
@@ -1629,6 +1684,18 @@ int main(int argc, char** argv) {
     tabBar->onSelectTab = [&](size_t i) { switchToTab(i); };
     tabBar->onCloseTab = [&](size_t i) { closeTab(i); };
     tabBar->onNewTab = [&]() { newTab(""); };
+
+    browser->springLoad = [&](const std::string& folder) -> bool {
+        for (size_t i = 0; i < tabs.size(); ++i) {
+            if (tabs[i].path == folder) {
+                if (i != activeTab) {
+                    switchToTab(i);
+                }
+                return true;
+            }
+        }
+        return false;
+    };
 
     auto goToFolder = [&] {
         if (!page->host()) return;

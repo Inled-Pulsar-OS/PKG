@@ -47,6 +47,7 @@ struct Browser {
     std::function<void(float size)> resizeIcons;  ///< Ctrl+scroll / pinch in the icon view
     /// Sorted, filtered listing of another folder (list view disclosure, columns). Cached by the owner.
     std::function<const std::vector<FileEntry>&(const std::string& folder)> listing;
+    std::function<bool(const std::string& folder)> springLoad;
 
     [[nodiscard]] bool isSelected(const std::string& p) const { return selection.count(p) > 0; }
     [[nodiscard]] const FileEntry* find(const std::string& p) const;
