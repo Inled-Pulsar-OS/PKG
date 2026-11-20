@@ -57,17 +57,6 @@ if [ -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Settin
        "$STAGE_DIR/usr/share/applications/system-settings.desktop"
 fi
 rm -f "$STAGE_DIR/usr/share/applications/io.github.egely1337.Mayonnaise.Settings.desktop"
-
-# Compatibility desktop entry with NoDisplay=true so DBus/GNOME Shell shortcuts work without duplicate icon
-cat << 'EOF_GCC' > "$STAGE_DIR/usr/share/applications/gnome-control-center.desktop"
-[Desktop Entry]
-Type=Application
-Name=System Settings
-Exec=system-settings
-Icon=org.gnome.Settings
-Terminal=false
-NoDisplay=true
-Categories=Settings;DesktopSettings;
-EOF_GCC
+rm -f "$STAGE_DIR/usr/share/applications/gnome-control-center.desktop"
 
 echo "✅ system-settings prepared in staging."

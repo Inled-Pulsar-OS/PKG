@@ -1964,25 +1964,6 @@ class RecoveryWindow(Adw.ApplicationWindow):
 
         content_box.append(group)
 
-        # Extra Packs group
-        pack_group = Adw.PreferencesGroup()
-        pack_group.set_title("Software Pack (Optional)")
-        pack_group.set_description("Optionally install an additional curated package pack:")
-
-        pack_combo_row = Adw.ComboRow()
-        pack_combo_row.set_title("Install Package Pack")
-        pack_store = Gtk.StringList()
-        pack_store.append("None (Suite only)")
-        pack_store.append("Developer Tools (git, gcc, base-devel, python)")
-        pack_store.append("Productivity & Office (LibreOffice, Evince)")
-        pack_store.append("Graphics & Multimedia (GIMP, Inkscape, VLC)")
-        pack_store.append("Gaming (Steam, GameMode)")
-        pack_combo_row.set_model(pack_store)
-        pack_combo_row.set_selected(0)
-        pack_group.add(pack_combo_row)
-
-        content_box.append(pack_group)
-
         dialog.set_extra_child(content_box)
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("apply", "Apply Changes")
@@ -1997,28 +1978,25 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if chk.get_active():
                         selected_suite = s_id
                         break
-                pack_idx = pack_combo_row.get_selected()
-                pack_keys = ["none", "dev", "office", "media", "gaming"]
-                selected_pack = pack_keys[pack_idx] if pack_idx < len(pack_keys) else "none"
 
                 self.progress_subtitle.set_label(f"Configuring desktop suite ({selected_suite})...")
                 self.target_disk_name_lbl.set_label("Pulsar Desktop Experience")
                 self.image.set_visible(True)
                 self.title_label.set_visible(True)
                 self.stack.set_visible_child_name("install_progress")
-                threading.Thread(target=self._manage_app_suites_backend, args=(selected_suite, selected_pack), daemon=True).start()
+                threading.Thread(target=self._manage_app_suites_backend, args=(selected_suite,), daemon=True).start()
 
         dialog.connect("response", on_response)
         dialog.present()
 
-    def _manage_app_suites_backend(self, suite_mode="pulsar_next", pack_name="none"):
-        """Install or reconfigure desktop app suites and packs on an existing system or running installation."""
+    def _manage_app_suites_backend(self, suite_mode="pulsar_next"):
+        """Install or reconfigure desktop app suites on an existing system or running installation."""
         import datetime
         os.makedirs("/var/log/pulsaros", exist_ok=True)
         log_file = "/var/log/pulsaros/app_suites.log"
         try:
             with open(log_file, "w") as lf:
-                lf.write(f"{datetime.datetime.now()} - Desktop suite configuration started (suite={suite_mode}, pack={pack_name})\n")
+                lf.write(f"{datetime.datetime.now()} - Desktop suite configuration started (suite={suite_mode})\n")
 
             def log_msg(msg):
                 ts = datetime.datetime.now().strftime("%H:%M:%S")
@@ -2070,39 +2048,24 @@ class RecoveryWindow(Adw.ApplicationWindow):
             next_pkgs = ["finder", "video-player", "system-settings", "system-monitor", "calculator"]
             gnome_pkgs = ["nautilus", "totem", "gnome-control-center", "gnome-system-monitor"]
 
-            pack_pkgs_arch = {
-                "dev": ["base-devel", "git", "python"],
-                "office": ["libreoffice-fresh", "evince"],
-                "media": ["gimp", "inkscape"],
-                "gaming": ["gamemode"],
-            }
-            pack_pkgs_deb = {
-                "dev": ["build-essential", "git", "python3"],
-                "office": ["libreoffice", "evince"],
-                "media": ["gimp", "inkscape"],
-                "gaming": ["gamemode"],
-            }
-
-            extra_pkgs = pack_pkgs_arch.get(pack_name, []) if is_arch else pack_pkgs_deb.get(pack_name, [])
-
             if is_arch:
                 if suite_mode == "pulsar_next":
                     log_msg("Switching to Pulsar Next suite...")
                     GLib.idle_add(self.update_progress, 0.20, "Removing conflicting classic apps if needed...")
                     subprocess.run(prefix + ["pacman", "-Rdd", "--noconfirm"] + gnome_pkgs, capture_output=True)
-                    to_install = next_pkgs + extra_pkgs
+                    to_install = next_pkgs
                 elif suite_mode == "standard_gnome":
                     log_msg("Switching to Standard GNOME suite...")
                     GLib.idle_add(self.update_progress, 0.20, "Removing Pulsar Next apps...")
                     subprocess.run(prefix + ["pacman", "-Rdd", "--noconfirm"] + next_pkgs, capture_output=True)
-                    to_install = gnome_pkgs + extra_pkgs
+                    to_install = gnome_pkgs
                 elif suite_mode == "both":
                     log_msg("Installing both Pulsar Next and Standard GNOME suites side-by-side...")
                     GLib.idle_add(self.update_progress, 0.20, "Configuring dual desktop suites...")
-                    to_install = next_pkgs + gnome_pkgs + extra_pkgs
+                    to_install = next_pkgs + gnome_pkgs
                 else:  # reinstall
                     log_msg("Reinstalling and repairing desktop packages...")
-                    to_install = next_pkgs + gnome_pkgs + extra_pkgs
+                    to_install = next_pkgs + gnome_pkgs
 
                 GLib.idle_add(self.update_progress, 0.40, "Checking for local packages...")
                 candidate_dirs = [
@@ -2144,14 +2107,14 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     log_msg("Removing classic GNOME applications via apt...")
                     GLib.idle_add(self.update_progress, 0.20, "Configuring Next suite...")
                     subprocess.run(prefix + ["apt-get", "remove", "-y", "--purge"] + gnome_pkgs, capture_output=True)
-                    to_install = next_pkgs + extra_pkgs
+                    to_install = next_pkgs
                 elif suite_mode == "standard_gnome":
                     log_msg("Configuring GNOME suite via apt...")
                     GLib.idle_add(self.update_progress, 0.20, "Removing Next applications...")
                     subprocess.run(prefix + ["apt-get", "remove", "-y", "--purge"] + next_pkgs, capture_output=True)
-                    to_install = gnome_pkgs + extra_pkgs
+                    to_install = gnome_pkgs
                 else:
-                    to_install = next_pkgs + gnome_pkgs + extra_pkgs
+                    to_install = next_pkgs + gnome_pkgs
 
                 GLib.idle_add(self.update_progress, 0.60, "Installing packages via apt...")
                 subprocess.run(prefix + ["apt-get", "update"], capture_output=True)

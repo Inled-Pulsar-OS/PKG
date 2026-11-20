@@ -1,14 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=Settings
-Name[es]=Configuración
-Name[fr]=Réglages
-Name[it]=Impostazioni
-Name[zh_CN]=设置
-GenericName=System Settings
-GenericName[es]=Configuración del sistema
-GenericName[fr]=Réglages du système
-GenericName[it]=Impostazioni di sistema
+Name=System Settings (New)
+Name[es]=Ajustes (Nuevo)
+Name[fr]=Réglages (Nouveau)
+Name[it]=Impostazioni (Nuovo)
+GenericName=System Settings (New)
+GenericName[es]=Ajustes del sistema (Nuevo)
+GenericName[fr]=Réglages du système (Nouveau)
+GenericName[it]=Impostazioni di sistema (Nuovo)
 Comment=Change your desktop, network, display, sound and other settings
 Comment[es]=Cambia el escritorio, la red, la pantalla, el sonido y otros ajustes
 Comment[fr]=Modifiez le bureau, le réseau, l'affichage, le son et d'autres paramètres
