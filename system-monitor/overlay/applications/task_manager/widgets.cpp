@@ -1,4 +1,5 @@
 #include "mayonnaise/ui_translation.hpp"
+#include "../common/app_icons.hpp"
 #include "widgets.hpp"
 
 #include <algorithm>
@@ -391,6 +392,11 @@ void drawProcessIcon(Painter& p, const Rect& r, const ProcessInfo& info) {
     if (info.isKernelThread) {
         p.strokeCircle(r.center(), r.width * 0.5f, t.colors.tertiaryLabel, 1);
         p.drawIcon(Icon::Gear, r.inset(3), t.colors.tertiaryLabel, 0.9f);
+        return;
+    }
+    // The icon comes from the application's .desktop entry and the active system icon theme.
+    if (auto icon = forma::appIconForProcess(info.name, info.command); icon) {
+        p.drawImage(r, *icon, 3.5f);
         return;
     }
     const Color palette[] = {t.colors.blue, t.colors.indigo, t.colors.purple, t.colors.pink, t.colors.orange,

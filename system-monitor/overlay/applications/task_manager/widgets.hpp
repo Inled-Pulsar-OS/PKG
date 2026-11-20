@@ -166,5 +166,5 @@ private:
     std::shared_ptr<mayo::MenuView> m_menu;
 };
 
-/// Small coloured circle with the process' initial (Linux has no reliable per-process icons).
+/// The process' application icon from the system theme, or a coloured initial when none is installed.
 void drawProcessIcon(mayo::Painter& p, const mayo::Rect& r, const ProcessInfo& info);

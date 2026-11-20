@@ -171,6 +171,8 @@ ClickRow linkRow(mayo::Icon icon, mayo::Color tile, const std::string& title, co
 mayo::Canvas tile(mayo::Icon icon, mayo::Color color, float size = 22);
 /// First letter of `name` on a tile coloured by a hash of the name (apps without a drawable icon).
 mayo::Canvas letterTile(const std::string& name, float size = 22);
+/// The application's real icon from the system theme, falling back to `letterTile`.
+mayo::Canvas appTile(const std::string& name, float size = 22);
 /// Plain glyph in a label colour.
 mayo::Canvas glyph(mayo::Icon icon, float size = 16, bool secondary = true);
 /// Large header card: tile, title and a description (System Settings pane header).

@@ -592,7 +592,7 @@ Element autostartPanel(Context& ctx) {
                                 Label(e.command).verbatim().font(TextStyle::Subheadline).secondary().lineLimit(1)})
                             .spacing(1);
             rows.push_back(FormRow(
-                HStack({ui::letterTile(e.name), text, Spacer(), toggle, remove}).spacing(10).align(Alignment::Center)));
+                HStack({ui::appTile(e.name), text, Spacer(), toggle, remove}).spacing(10).align(Alignment::Center)));
         }
         card->setRows(rows);
     };

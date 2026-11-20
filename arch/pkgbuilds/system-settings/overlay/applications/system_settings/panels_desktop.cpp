@@ -571,7 +571,7 @@ Element notificationsPanel(Context& ctx) {
             gx::Key enable(kAppNotifications, "enable", path);
             auto toggle = Toggle("", enable.getBool(true)).onChange([enable](bool on) { enable.set(on); });
             enable.watch([enable, toggle]() mutable { toggle.setOn(enable.getBool(true)); });
-            auto row = ui::ClickRow({ui::letterTile(e.name), Label(e.name), Spacer(), toggle});
+            auto row = ui::ClickRow({ui::appTile(e.name), Label(e.name), Spacer(), toggle});
             row.onClick([anchor = ui::Anchor(row), path, name = e.name] {
                 auto details = ui::section(name, {
                     ui::toggleRow("Sound Alerts", gx::Key(kAppNotifications, "enable-sound-alerts", path)),
@@ -646,7 +646,7 @@ Element searchPanel(Context& ctx) {
             if (on == p.defaultDisabled) v.push_back(p.id);
             list.setStrv(v);
         });
-        rows.push_back(ui::ClickRow({ui::letterTile(p.name), Label(p.name), Spacer(), t}));
+        rows.push_back(ui::ClickRow({ui::appTile(p.name), Label(p.name), Spacer(), t}));
         auto sync = [p, t, isOn]() mutable { t.setOn(isOn(p)); };
         disabled.watch(sync);
         enabled.watch(sync);

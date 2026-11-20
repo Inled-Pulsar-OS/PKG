@@ -1091,7 +1091,7 @@ private:
                     [idx] { return pactl({"set-sink-input-mute", idx, "toggle"}); });
                 auto title = VStack({Label(s.app).lineLimit(1)}).spacing(1);
                 if (!s.media.empty() && s.media != s.app) title.add(Label(s.media).font(TextStyle::Subheadline).secondary().lineLimit(1).maxWidth(200));
-                rows.push_back(FormRow(HStack({ui::letterTile(s.app), title, Spacer(), control->element()}).spacing(10).align(Alignment::Center)));
+                rows.push_back(FormRow(HStack({ui::appTile(s.app), title, Spacer(), control->element()}).spacing(10).align(Alignment::Center)));
                 m_streamControls.push_back(std::move(control));
             }
             m_apps.setRows(rows);

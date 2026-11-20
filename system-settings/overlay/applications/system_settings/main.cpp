@@ -1,4 +1,4 @@
-#include "../common/zh_cn.hpp"
+#include "../common/l10n.hpp"
 // Settings — a System Settings-style control centre for GNOME and KDE Plasma (and other GNU/Linux desktops
 // where the services exist) built on Mayonnaise.
 //
@@ -26,7 +26,7 @@
 using namespace mayo;
 
 int main(int argc, char** argv) {
-    mayo::setUiTranslator(forma::zhCN);
+    forma::localizeUi();
     App app("system-settings", MAYO_DESKTOP_ID);
     auto& prefs = app.settings();
     gx::setReadOnly(std::getenv("MAYO_SCREENSHOT") || std::getenv("SETTINGS_READ_ONLY"));
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
         if (it == built.end()) it = built.emplace(id, info->build(ctx)).first;
         split.setDetail(it->second);
         titleLabel.setText(info->title);
-        window.setTitle(std::string(info->title) + " — System Settings");
+        window.setTitle(mayo::uiText(info->title) + " — " + mayo::uiText("Settings"));
         sidebar.selection(id);
         backButton.setDisabled(back.empty());
         forwardButton.setDisabled(forward.empty());

@@ -1,4 +1,4 @@
-#include "../common/zh_cn.hpp"
+#include "../common/l10n.hpp"
 // Task Manager — an Activity Monitor-style system monitor for Linux built on Mayonnaise.
 //
 // CPU / Memory / Disk / Network tabs with live history graphs, a sortable process table (click headers,
@@ -226,10 +226,10 @@ std::vector<Column> columnsFor(Tab tab, const std::uint64_t& memTotal) {
 }  // namespace
 
 int main() {
-    mayo::setUiTranslator(forma::zhCN);
+    forma::localizeUi();
     App app("task_manager", MAYO_DESKTOP_ID);
     auto& window = app.createWindow(
-        {.title = "Task Manager", .width = 1180, .height = 780, .minWidth = 820, .minHeight = 560, .autosaveName = "main"});
+        {.title = "System Monitor", .width = 1180, .height = 780, .minWidth = 820, .minHeight = 560, .autosaveName = "main"});
     Settings& prefs = app.settings();
 
     std::shared_ptr<SystemSnapshot> latest;
@@ -315,14 +315,14 @@ int main() {
     auto memBar = std::make_shared<UsageBar>();
     auto swapBar = std::make_shared<UsageBar>();
     StatRow memPressure("Memory Pressure", pressureColor);
-    memPressure.value.tooltip("Percentage of time tasks waited for memory over the last 10 seconds (PSI avg10).");
-    StatRow legendUsed("App Memory", [&] { return colors().blue; });
-    StatRow legendCached("Cached Files", [&] { return colors().purple; });
-    StatRow legendFree("Free Memory", [&] { return colors().fill.withAlpha(0.6f); });
+    memPressure.value.tooltip("Share of time in the last 10 seconds with at least one task waiting on memory (PSI some avg10), not memory usage.");
+    StatRow legendUsed("In use (total − available)", [&] { return colors().blue; });
+    StatRow legendCached("Available cache (estimate)", [&] { return colors().purple; });
+    StatRow legendFree("Other available", [&] { return colors().fill.withAlpha(0.6f); });
     StatRow legendSwap("In use");
     auto memPanel =
         HStack({
-                   card(VStack({caption("MEMORY PRESSURE (10s)"), Element(memGraph), memPressure.row}).spacing(6)),
+                   card(VStack({caption("MEMORY PRESSURE (PSI · 10s)"), Element(memGraph), memPressure.row}).spacing(6)),
                    card(VStack({caption("MEMORY"), memPhysical.row, memUsed.row, memCached.row, memFree.row, Divider(),
                                 swapUsed.row, swapActivity.row})
                             .spacing(5))
@@ -404,7 +404,7 @@ int main() {
                                                     : pressure < 0.75 ? "Elevated"
                                                                       : "Critical") +
                                             " · " + percent(pressure)
-                                      : "Unavailable (PSI unreadable)");
+                                      : "Unavailable (PSI cannot be read)");
         const double total = static_cast<double>(std::max<std::uint64_t>(1, s.memTotal));
         auto bytes = [&](std::uint64_t value) { return s.memoryKnown ? formatBytes(static_cast<double>(value)) : "—"; };
         memPhysical.set(bytes(s.memTotal));
@@ -414,8 +414,11 @@ int main() {
         swapUsed.set(s.swapKnown ? formatBytes(static_cast<double>(s.swapUsed)) + " / " +
                                        formatBytes(static_cast<double>(s.swapTotal), 0)
                                  : "—");
-        std::snprintf(buf, sizeof buf, "In: %.0f/s · Out: %.0f/s", s.swapInRate, s.swapOutRate);
-        swapActivity.set(buf);
+        char swapIn[32];
+        char swapOut[32];
+        std::snprintf(swapIn, sizeof swapIn, "%.0f", s.swapInRate);
+        std::snprintf(swapOut, sizeof swapOut, "%.0f", s.swapOutRate);
+        swapActivity.set(std::string(mayo::uiText("Swap in")) + " " + swapIn + " · " + mayo::uiText("Swap out") + " " + swapOut);
         // Available already includes reclaimable cache. Limit the cache segment to available memory
         // rather than drawing an overlapping breakdown whose fractions can exceed 100%.
         const auto availableCache = std::min(s.memCached, s.memAvailable);
@@ -460,11 +463,11 @@ int main() {
             bar->setSegments({{used, used > 0.9 ? colors().red : colors().accent}});
             volumes.add(VStack({HStack({Label(fs.mountPoint).font(TextStyle::Callout).weight(FontWeight::Medium),
                                         Label(fs.type).font(TextStyle::Caption).tertiary(), Spacer(),
-                                        Label(formatBytes(static_cast<double>(fs.available)) + " free").font(TextStyle::Caption).secondary()})
+                                        Label(formatBytes(static_cast<double>(fs.available)) + " " + mayo::uiText("available")).font(TextStyle::Caption).secondary()})
                                     .spacing(6)
                                     .align(Alignment::Center),
                                 Element(bar),
-                                Label(formatBytes(static_cast<double>(fs.total - fs.available)) + " used of " +
+                                Label(formatBytes(static_cast<double>(fs.total - fs.available)) + " " + mayo::uiText("used") + " / " +
                                       formatBytes(static_cast<double>(fs.total)) + " · " + fs.device)
                                     .font(TextStyle::Caption)
                                     .tertiary()
@@ -544,7 +547,8 @@ int main() {
             }
         }
         if (!p) {
-            inspName.setText(inspName.text().find(" (Exited)") == std::string::npos ? inspName.text() + " (Exited)" : inspName.text());
+            const std::string exited = mayo::uiText(" (Exited)");
+            inspName.setText(inspName.text().find(exited) == std::string::npos ? inspName.text() + exited : inspName.text());
             return;
         }
         char buf[64];
@@ -605,17 +609,17 @@ int main() {
         quitForce.setDisabled(true);
         std::string message;
         switch (result.status) {
-            case ProcessStatus::Exited: message = "Target process has exited; no signal sent."; break;
+            case ProcessStatus::Exited: message = mayo::uiText("The target process has exited; no signal was sent."); break;
             case ProcessStatus::IdentityChanged:
-                message = "Process identity changed (PID reused); signal refused. Please re-select.";
+                message = mayo::uiText("The process identity changed (PID reused); no signal was sent. Select it again.");
                 break;
             case ProcessStatus::Unsupported:
-                message = "Kernel does not support safe pidfd operations; operation refused.";
+                message = mayo::uiText("The kernel does not support safe pidfd operations; refusing to quit; no PID fallback.");
                 break;
-            case ProcessStatus::PermissionDenied: message = "Permission denied to operate on this process."; break;
-            case ProcessStatus::NotBound: message = "No verified process binding."; break;
+            case ProcessStatus::PermissionDenied: message = mayo::uiText("No permission to bind or quit this process safely."); break;
+            case ProcessStatus::NotBound: message = mayo::uiText("No verified process binding; confirm again."); break;
             default:
-                message = "Cannot safely operate on target process";
+                message = mayo::uiText("Could not safely operate on the target process; no signal was sent");
                 if (result.error) message += std::string(": ") + std::strerror(result.error);
                 break;
         }
@@ -630,7 +634,8 @@ int main() {
         if (!p) return;
         // Dismissing an older confirmation releases its binding before opening the new one.
         quitPopover.dismiss();
-        quitQuestion.setText("Do you want to " + std::string(force ? "force quit" : "quit") + " process \"" + p->name + "\"?");
+        quitQuestion.setText(forma::message(force ? "Do you want to force quit “{name}”?" : "Do you want to quit “{name}”?",
+                                           {{"name", p->name}}));
         quitError.setHidden(true);
         const auto bound = quitting.bind({p->pid, p->startTicks});
         quitButton.setDisabled(!bound);
@@ -767,7 +772,7 @@ int main() {
             settingsWindow->raise();
             return;
         }
-        auto& w = app.createWindow({.title = "Task Manager Settings", .width = 540, .height = 470, .minWidth = 460, .minHeight = 320});
+        auto& w = app.createWindow({.title = "System Monitor Settings", .width = 540, .height = 470, .minWidth = 460, .minHeight = 320});
         constexpr double kIntervals[] = {1, 2, 5};
         auto intervalIndex = [&] {
             const double now = monitor->interval();

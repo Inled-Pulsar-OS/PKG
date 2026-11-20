@@ -1,4 +1,5 @@
 #include "ui.hpp"
+#include "../common/app_icons.hpp"
 #include "mayonnaise/ui_translation.hpp"
 
 #include <algorithm>
@@ -423,6 +424,14 @@ Canvas letterTile(const std::string& name, float size) {
         p.drawText(letter, r, theme().font(TextStyle::Callout).withWeight(FontWeight::Semibold).withSize(r.height * 0.5f),
                    Color::white(), TextAlign::Center);
     });
+    c.frame(size, size);
+    return c;
+}
+
+Canvas appTile(const std::string& name, float size) {
+    auto image = forma::appIconForName(name);
+    if (!image) return letterTile(name, size);
+    auto c = Canvas([image](Painter& p, const Rect& r) { p.drawImage(r, *image); });
     c.frame(size, size);
     return c;
 }

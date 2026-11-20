@@ -897,7 +897,7 @@ Element notificationsPanel(Context& /*ctx*/) {
         ui::bindControl(show, toggle, [weak = std::weak_ptr<ToggleView>(toggle.node())](const gx::Key& k, bool) {
             if (auto control = weak.lock()) control->setOn(k.getBool(true));
         });
-        auto row = ui::ClickRow({ui::letterTile(e.name), Label(e.name), Spacer(), toggle});
+        auto row = ui::ClickRow({ui::appTile(e.name), Label(e.name), Spacer(), toggle});
         row.onClick([anchor = ui::Anchor(row), group = e.group, name = e.name] {
             auto details = ui::section(name, {
                 ui::toggleRow("Show Popups", kcfg::key(kRc, group, "ShowPopups", "b", "true")),
