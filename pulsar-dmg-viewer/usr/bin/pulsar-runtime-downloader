@@ -103,13 +103,21 @@ class DownloaderWindow(Adw.ApplicationWindow):
         error_msg = ""
 
         if os.path.exists("/etc/arch-release"):
-            cmd = ["pkexec", "pacman", "-Sy", "--noconfirm", "pulsar-appexec"]
+            cmd = [
+                "pkexec",
+                "pacman",
+                "-Sy",
+                "--noconfirm",
+                "--overwrite",
+                "*",
+                "pulsar-appexec",
+            ]
         else:
             cmd = [
                 "pkexec",
                 "bash",
                 "-c",
-                "apt-get update -qq && apt-get install -y pulsar-appexec",
+                "apt-get update -qq && apt-get install -y -o Dpkg::Options::='--force-overwrite' pulsar-appexec",
             ]
 
         try:
