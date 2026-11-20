@@ -9,6 +9,10 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
+/// Largest clipboard entry kept in history; longer text is cut on a char boundary.
+pub const MAX_ITEM_BYTES: usize = 64 * 1024;
+const SECRET_HINT_MIME: &str = "x-kde-passwordManagerHint";
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClipboardItem {
     pub text: String,
@@ -75,26 +79,62 @@ impl ClipboardManager {
     pub fn save(&self) {
         let inner = self.inner.lock().unwrap();
         let Some(dir) = inner.data_dir.clone() else { return };
-        let _ = fs::create_dir_all(&dir);
+        if Self::ensure_private_dir(&dir).is_err() {
+            return;
+        }
         let file = Self::clipboard_file_in(&dir);
         if let Ok(content) = serde_json::to_string_pretty(&inner.items) {
-            if fs::write(&file, content).is_ok() {
-                Self::set_owner_only_permissions(&file);
-            }
+            let _ = Self::write_private(&file, content.as_bytes());
         }
     }
 
-    /// Locks the clipboard-history file to owner read/write only (0600),
-    /// regardless of the process umask, so other local accounts can't read it.
-    fn set_owner_only_permissions(path: &std::path::Path) {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    /// Creates `dir` (and parents) and locks it to 0700, so other local accounts
+    /// can't list or traverse it, whatever the umask or a previous version left.
+    fn ensure_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o700))
+    }
+
+    /// Writes `bytes` to a 0600 temp file created with that mode (never readable by
+    /// others, even briefly) and renames it over `path`, which also tightens a
+    /// pre-existing looser file.
+    fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let tmp = path.with_extension("json.tmp");
+        let _ = fs::remove_file(&tmp);
+        let mut f = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp)?;
+        f.write_all(bytes)?;
+        drop(f);
+        fs::rename(&tmp, path)
+    }
+
+    /// True when the clipboard offer marks its content as secret (password managers set
+    /// `x-kde-passwordManagerHint`), so history must not record it.
+    pub fn has_secret_hint<S: AsRef<str>>(mime_types: &[S]) -> bool {
+        mime_types.iter().any(|m| m.as_ref() == SECRET_HINT_MIME)
+    }
+
+    /// Records `text` unless the offer's mime types flag it as a secret.
+    pub fn record_clip_with_formats<S: AsRef<str>>(&self, text: &str, mime_types: &[S]) {
+        if Self::has_secret_hint(mime_types) {
+            return;
+        }
+        self.record_clip(text);
     }
 
     pub fn record_clip(&self, text: &str) {
-        let clean = text.trim();
+        let mut clean = text.trim();
         if clean.is_empty() {
             return;
+        }
+        if clean.len() > MAX_ITEM_BYTES {
+            let mut end = MAX_ITEM_BYTES;
+            while !clean.is_char_boundary(end) {
+                end -= 1;
+            }
+            clean = &clean[..end];
         }
 
         let mut inner = self.inner.lock().unwrap();

@@ -157,27 +157,7 @@ impl SearchBackend {
         F: Fn(Vec<SearchResult>) + 'static,
     {
         let query = query.to_string();
-        let (sender, receiver) = std::sync::mpsc::channel::<Vec<SearchResult>>();
-
-        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(1), move || {
-            match receiver.try_recv() {
-                Ok(results) => {
-                    callback(results);
-                    gtk4::glib::ControlFlow::Break
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    gtk4::glib::ControlFlow::Continue
-                }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    gtk4::glib::ControlFlow::Break
-                }
-            }
-        });
-
-        thread::spawn(move || {
-            let results = query_browser_history_plain(&query, limit);
-            let _ = sender.send(results);
-        });
+        run_async(move || query_browser_history_plain(&query, limit), callback);
     }
 
     pub fn search_web(&self, query: &str) -> Vec<SearchResult> {
@@ -289,34 +269,45 @@ impl SearchBackend {
 
         let query = query.to_string();
         let category = category.to_string();
-
-        let (sender, receiver) = std::sync::mpsc::channel::<Vec<SearchResult>>();
-
-        gtk4::glib::timeout_add_local(std::time::Duration::from_millis(1), move || {
-            match receiver.try_recv() {
-                Ok(results) => {
-                    callback(results);
-                    gtk4::glib::ControlFlow::Break
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    gtk4::glib::ControlFlow::Continue
-                }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    gtk4::glib::ControlFlow::Break
-                }
-            }
-        });
-
-        thread::spawn(move || {
-            let results = search_nautilus(&query, &category, limit);
-            let _ = sender.send(results);
-        });
+        run_async(move || search_nautilus(&query, &category, limit), callback);
     }
 
     #[allow(dead_code)]
     fn execute_sparql(&self, sparql: &str) -> Vec<SearchResult> {
         execute_sparql_external(sparql)
     }
+}
+
+thread_local! {
+    /// Callbacks waiting for a worker result, keyed by job id. Touched only on the GTK main thread.
+    static PENDING: RefCell<std::collections::HashMap<u64, Box<dyn FnOnce(Vec<SearchResult>)>>> =
+        RefCell::new(std::collections::HashMap::new());
+    static NEXT_JOB: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Runs `job` on a worker thread and calls `callback` with its result on the calling (main)
+/// thread. The worker wakes the main loop with `MainContext::invoke` when it finishes, so no
+/// polling timer exists while a search is pending. `callback` is always called exactly once.
+fn run_async<J, F>(job: J, callback: F)
+where
+    J: FnOnce() -> Vec<SearchResult> + Send + 'static,
+    F: FnOnce(Vec<SearchResult>) + 'static,
+{
+    let id = NEXT_JOB.with(|n| {
+        let id = n.get();
+        n.set(id + 1);
+        id
+    });
+    PENDING.with(|p| p.borrow_mut().insert(id, Box::new(callback)));
+    let ctx = gtk4::glib::MainContext::default();
+    thread::spawn(move || {
+        let results = job();
+        ctx.invoke(move || {
+            if let Some(cb) = PENDING.with(|p| p.borrow_mut().remove(&id)) {
+                cb(results);
+            }
+        });
+    });
 }
 
 pub fn matches_category(filename: &str, category: &str) -> bool {

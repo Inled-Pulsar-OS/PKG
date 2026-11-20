@@ -172,27 +172,122 @@ fn has_thumbnail_support(url: &str) -> bool {
     is_image_file(url) || is_pdf_file(url) || is_video_file(url)
 }
 
+/// How long a thumbnail helper (`pdftoppm`, `ffmpeg`) may run before it is killed.
+const THUMB_HELPER_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Picks the directory that holds scratch roots: `$XDG_RUNTIME_DIR` when it is an existing
+/// absolute directory, else the per-user cache dir. Never falls back to `/tmp`; with neither
+/// available it returns `None` and the caller skips the thumbnail.
+fn scratch_base(
+    runtime_dir: Option<std::path::PathBuf>,
+    cache_home: Option<std::path::PathBuf>,
+    cache_dir: Option<std::path::PathBuf>,
+    home: Option<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
+    runtime_dir
+        .filter(|p| p.is_absolute() && p.is_dir())
+        .or_else(|| {
+            cache_home
+                .filter(|p| p.is_absolute())
+                .or(cache_dir)
+                .or_else(|| home.map(|h| h.join(".cache")))
+                .map(|c| c.join("pulsaros-spotlight"))
+        })
+}
+
+/// A private, exclusively created scratch directory for one thumbnail job. It lives under
+/// `$XDG_RUNTIME_DIR` (or the cache dir), never in world-writable `/tmp`, so another local
+/// user can't pre-create the output path as a symlink. Removed on drop.
+struct ScratchDir(std::path::PathBuf);
+
+impl ScratchDir {
+    fn new() -> Option<Self> {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+        let base = scratch_base(
+            std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from),
+            std::env::var_os("XDG_CACHE_HOME").map(std::path::PathBuf::from),
+            dirs::cache_dir(),
+            dirs::home_dir(),
+        )?;
+        let root = base.join("pulsaros-spotlight-scratch");
+        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&root).ok()?;
+        let meta = std::fs::symlink_metadata(&root).ok()?;
+        // SAFETY: getuid has no preconditions.
+        let me = unsafe { libc::getuid() };
+        if !meta.is_dir() || meta.uid() != me || meta.mode() & 0o077 != 0 {
+            return None;
+        }
+        // mkdir fails if the name exists, so the job directory is ours alone.
+        let dir = root.join(format!("job-{}-{}", std::process::id(), out_counter()));
+        std::fs::DirBuilder::new().mode(0o700).create(&dir).ok()?;
+        Some(ScratchDir(dir))
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Runs `cmd` and kills it if it outlives `limit`. Returns true when it exited by itself with
+/// success; a spawn error, timeout or non-zero exit is false.
+fn run_with_timeout(mut cmd: Command, limit: Duration) -> bool {
+    use std::os::unix::process::CommandExt;
+    use std::process::Stdio;
+    let Ok(mut child) = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+    else {
+        return false;
+    };
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(st)) => return st.success(),
+            Ok(None) if start.elapsed() >= limit => {
+                // SAFETY: signals the helper's own process group (pgid == pid via process_group(0)).
+                unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
+                let _ = child.kill();
+                let _ = child.wait();
+                return false;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => return false,
+        }
+    }
+}
+
 // Runs on a worker thread: decodes + scales into a thread-safe Pixbuf.
 fn generate_thumb_pixbuf(url: &str, size: i32) -> Option<gdk_pixbuf::Pixbuf> {
     let path = url.trim_start_matches("file://");
 
     if is_pdf_file(url) {
-        let tmp_base = format!("/tmp/pulsar_thumb_{}_{}", std::process::id(), out_counter());
-        let _ = Command::new("pdftoppm")
-            .args(&["-png", "-singlefile", "-r", "72", "-l", "1", path, &tmp_base])
-            .output();
-        let tmp_png = format!("{}.png", tmp_base);
-        let pb = gdk_pixbuf::Pixbuf::from_file_at_scale(&tmp_png, size, size, true).ok();
-        let _ = std::fs::remove_file(&tmp_png);
-        pb
+        let scratch = ScratchDir::new()?;
+        let base = scratch.path().join("page");
+        let mut cmd = Command::new("pdftoppm");
+        cmd.args(["-png", "-singlefile", "-r", "72", "-l", "1", path]).arg(&base);
+        if !run_with_timeout(cmd, THUMB_HELPER_TIMEOUT) {
+            return None;
+        }
+        gdk_pixbuf::Pixbuf::from_file_at_scale(base.with_extension("png"), size, size, true).ok()
     } else if is_video_file(url) {
-        let tmp_jpg = format!("/tmp/pulsar_thumb_{}_{}.jpg", std::process::id(), out_counter());
-        let _ = Command::new("ffmpeg")
-            .args(&["-y", "-ss", "00:00:01", "-i", path, "-frames:v", "1", "-q:v", "5", &tmp_jpg])
-            .output();
-        let pb = gdk_pixbuf::Pixbuf::from_file_at_scale(&tmp_jpg, size, size, true).ok();
-        let _ = std::fs::remove_file(&tmp_jpg);
-        pb
+        let scratch = ScratchDir::new()?;
+        let out = scratch.path().join("frame.jpg");
+        let mut cmd = Command::new("ffmpeg");
+        // -n: never overwrite; -nostdin: never read the terminal.
+        cmd.args(["-nostdin", "-n", "-ss", "00:00:01", "-i", path, "-frames:v", "1", "-q:v", "5"]).arg(&out);
+        if !run_with_timeout(cmd, THUMB_HELPER_TIMEOUT) {
+            return None;
+        }
+        gdk_pixbuf::Pixbuf::from_file_at_scale(&out, size, size, true).ok()
     } else if is_image_file(url) {
         gdk_pixbuf::Pixbuf::from_file_at_scale(path, size, size, true).ok()
     } else {

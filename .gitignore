@@ -38,3 +38,9 @@ arch/pkgbuilds/*/pulsaros-spotlight
 arch/pkgbuilds/*/src/
 arch/pkgbuilds/*/pkg/
 arch/pkgbuilds/*/*.pkg.tar.*
+
+.claude
+AGENTS.md
+CLAUDE.md
+GLOSSARY.md
+docs/
