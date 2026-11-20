@@ -70,4 +70,17 @@ NoDisplay=true
 Categories=System;Monitor;
 EOF_GSM
 
+# Ensure icons are installed in hicolor so the application never shows blank
+mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
+ICON_SRC="$SCRIPT_DIR/overlay/applications/task_manager/data/system-monitor.svg"
+if [ ! -f "$ICON_SRC" ]; then
+    ICON_SRC="$SCRIPT_DIR/overlay/applications/task_manager/data/io.github.egely1337.Mayonnaise.TaskManager.svg"
+fi
+if [ -f "$ICON_SRC" ]; then
+    cp -f "$ICON_SRC" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/system-monitor.svg"
+    cp -f "$ICON_SRC" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/org.gnome.SystemMonitor.svg"
+    cp -f "$ICON_SRC" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/utilities-system-monitor.svg"
+    cp -f "$ICON_SRC" "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/io.github.egely1337.Mayonnaise.TaskManager.svg"
+fi
+
 echo "✅ system-monitor prepared in staging."

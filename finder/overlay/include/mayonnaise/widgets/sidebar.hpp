@@ -60,6 +60,7 @@ public:
     [[nodiscard]] const std::string& selection() const { return m_selection; }
     void setOnSelect(std::function<void(const std::string&)> fn) { m_onSelect = std::move(fn); }
     void setOnAction(std::function<void(const std::string&)> fn) { m_onAction = std::move(fn); }
+    void setOnContextMenu(std::function<void(const std::string&, Point)> fn) { m_onContextMenu = std::move(fn); }
     void setSelectionStyle(SidebarSelectionStyle s);
     /// Optional widget shown above the list (search field, account card).
     void setHeader(std::shared_ptr<Widget> header);
@@ -93,6 +94,7 @@ private:
     std::string m_selection;
     std::function<void(const std::string&)> m_onSelect;
     std::function<void(const std::string&)> m_onAction;
+    std::function<void(const std::string&, Point)> m_onContextMenu;
     SidebarSelectionStyle m_style = SidebarSelectionStyle::Neutral;
     std::shared_ptr<Widget> m_header;
     int m_hovered = -1;
@@ -114,6 +116,9 @@ public:
     Sidebar& selection(const std::string& id) { return apply([&](SidebarView& n) { n.setSelection(id); }); }
     Sidebar& onSelect(std::function<void(const std::string&)> fn) {
         return apply([&](SidebarView& n) { n.setOnSelect(std::move(fn)); });
+    }
+    Sidebar& onContextMenu(std::function<void(const std::string&, Point)> fn) {
+        return apply([&](SidebarView& n) { n.setOnContextMenu(std::move(fn)); });
     }
     Sidebar& selectionStyle(SidebarSelectionStyle s) { return apply([&](SidebarView& n) { n.setSelectionStyle(s); }); }
     Sidebar& header(const Element& e) { return apply([&](SidebarView& n) { n.setHeader(e.widget()); }); }

@@ -14,8 +14,8 @@ namespace finder {
 
 namespace {
 
-constexpr size_t kBudget = 48u << 20;  // bytes of thumbnail textures kept around
-constexpr size_t kMaxQueue = 400;      // older requests are dropped (scrolled past long ago)
+constexpr size_t kBudget = 64u << 20;  // bytes of thumbnail textures kept around
+constexpr size_t kMaxQueue = 20000;    // generous queue so large folders generate previews for all items
 constexpr std::uintmax_t kMaxImageFile = 80u << 20;
 
 /// Thumbnail sizes are bucketed so a slightly different icon size doesn't reload everything.
@@ -234,12 +234,14 @@ std::shared_ptr<ImageData> loadOrGenerateThumbnail(const std::string& path, int 
     if (ext == "mp4" || ext == "mkv" || ext == "mov" || ext == "avi" || ext == "webm" ||
         ext == "flv" || ext == "wmv" || ext == "m4v" || ext == "mpg" || ext == "mpeg" ||
         ext == "ts" || ext == "3gp" || ext == "ogv") {
-        std::string cmd = "ffmpeg -y -ss 00:00:01 -i " + escCan + " -vframes 1 -vf \"scale=256:256:force_original_aspect_ratio=decrease\" " + escL + " >/dev/null 2>&1";
+        std::string cmd = "nice -n 19 ionice -c 3 ffmpeg -threads 1 -y -nostats -loglevel error -ss 00:00:01 -i " + escCan + " -vframes 1 -vf \"scale=256:256:force_original_aspect_ratio=decrease\" " + escL + " >/dev/null 2>&1";
         if (std::system(cmd.c_str()) != 0 || !fs::exists(l, ec)) {
             // Fallback for short videos (< 1s)
-            cmd = "ffmpeg -y -ss 00:00:00 -i " + escCan + " -vframes 1 -vf \"scale=256:256:force_original_aspect_ratio=decrease\" " + escL + " >/dev/null 2>&1";
+            cmd = "nice -n 19 ionice -c 3 ffmpeg -threads 1 -y -nostats -loglevel error -ss 00:00:00 -i " + escCan + " -vframes 1 -vf \"scale=256:256:force_original_aspect_ratio=decrease\" " + escL + " >/dev/null 2>&1";
             (void)std::system(cmd.c_str());
         }
+        // Throttled step-by-step so video thumbnails process with very low CPU impact
+        std::this_thread::sleep_for(std::chrono::milliseconds(35));
         if (fs::exists(l, ec)) {
             return ImageData::load(l, pixels);
         }

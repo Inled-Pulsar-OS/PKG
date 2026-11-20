@@ -29,6 +29,9 @@ public:
     void setOnChange(std::function<void(const std::string&)> fn) { m_onChange = std::move(fn); }
     void setOnSubmit(std::function<void(const std::string&)> fn) { m_onSubmit = std::move(fn); }
     void selectAll();
+    void selectBaseName();
+    void setSelectBaseNameOnly(bool v) { m_selectBaseNameOnly = v; }
+    [[nodiscard]] bool selectBaseNameOnly() const { return m_selectBaseNameOnly; }
     [[nodiscard]] size_t caret() const { return m_caret; }
     [[nodiscard]] size_t selectionAnchor() const { return m_anchor; }
 
@@ -77,6 +80,7 @@ private:
     std::string m_placeholder;
     TextFieldStyle m_style = TextFieldStyle::Rounded;
     bool m_secure = false;
+    bool m_selectBaseNameOnly = false;
     size_t m_caret = 0;
     size_t m_anchor = 0;
     float m_scrollX = 0;
@@ -98,6 +102,7 @@ public:
     TextField& text(std::string t) { return apply([&](TextFieldView& n) { n.setText(std::move(t)); }); }
     TextField& style(TextFieldStyle s) { return apply([&](TextFieldView& n) { n.setStyle(s); }); }
     TextField& secure(bool s = true) { return apply([&](TextFieldView& n) { n.setSecure(s); }); }
+    TextField& selectBaseNameOnly(bool s = true) { return apply([&](TextFieldView& n) { n.setSelectBaseNameOnly(s); }); }
     TextField& onChange(std::function<void(const std::string&)> fn) {
         return apply([&](TextFieldView& n) { n.setOnChange(std::move(fn)); });
     }

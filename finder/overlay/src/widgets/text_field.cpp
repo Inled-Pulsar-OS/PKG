@@ -98,6 +98,20 @@ void TextFieldView::selectAll() {
     invalidate();
 }
 
+void TextFieldView::selectBaseName() {
+    cancelComposition();
+    if (m_text.empty()) return;
+    size_t dot = m_text.rfind('.');
+    if (dot != std::string::npos && dot > 0) {
+        m_anchor = 0;
+        m_caret = dot;
+    } else {
+        m_anchor = 0;
+        m_caret = m_text.size();
+    }
+    invalidate();
+}
+
 namespace {
 size_t editingByte(std::string_view text, int codePoints) {
     size_t offset = 0;
@@ -418,21 +432,25 @@ bool TextFieldView::onPointerDown(const PointerEvent& e) {
     if (e.clickCount >= 3) {
         selectAll();
     } else if (e.clickCount == 2) {
-        // Select the word under the pointer (or the single separator character).
-        auto isWordAt = [&](size_t at) {
-            size_t k = at;
-            return at < m_text.size() && utf8::isWordChar(utf8::next(m_text, k));
-        };
-        size_t a = i;
-        size_t b = i;
-        if (isWordAt(i) || (i > 0 && isWordAt(utf8::prevBoundary(m_text, i)))) {
-            while (a > 0 && isWordAt(utf8::prevBoundary(m_text, a))) a = utf8::prevBoundary(m_text, a);
-            while (isWordAt(b)) b = utf8::nextBoundary(m_text, b);
+        if (m_selectBaseNameOnly) {
+            selectBaseName();
         } else {
-            b = utf8::nextBoundary(m_text, i);
+            // Select the word under the pointer (or the single separator character).
+            auto isWordAt = [&](size_t at) {
+                size_t k = at;
+                return at < m_text.size() && utf8::isWordChar(utf8::next(m_text, k));
+            };
+            size_t a = i;
+            size_t b = i;
+            if (isWordAt(i) || (i > 0 && isWordAt(utf8::prevBoundary(m_text, i)))) {
+                while (a > 0 && isWordAt(utf8::prevBoundary(m_text, a))) a = utf8::prevBoundary(m_text, a);
+                while (isWordAt(b)) b = utf8::nextBoundary(m_text, b);
+            } else {
+                b = utf8::nextBoundary(m_text, i);
+            }
+            m_anchor = a;
+            m_caret = b;
         }
-        m_anchor = a;
-        m_caret = b;
     } else {
         moveCaret(i, hasModifier(e.modifiers, Modifiers::Shift));
         m_dragging = true;

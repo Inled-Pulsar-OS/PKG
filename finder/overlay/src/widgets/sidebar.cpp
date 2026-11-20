@@ -256,6 +256,17 @@ void SidebarView::draw(Painter& p) {
 }
 
 bool SidebarView::onPointerDown(const PointerEvent& e) {
+    if (e.button == MouseButton::Right) {
+        int r = rowAt(e.position);
+        if (r >= 0 && r < static_cast<int>(m_items.size())) {
+            const auto& item = m_items[static_cast<size_t>(r)];
+            if (!item.isHeader && m_onContextMenu) {
+                m_onContextMenu(item.id, e.position);
+                return true;
+            }
+        }
+        return false;
+    }
     if (e.button != MouseButton::Left) return false;
     m_pressed = rowAt(e.position);
     if (m_pressed < 0) return false;

@@ -2177,9 +2177,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 if gnome_app in pkgs:
                     pkgs.remove(gnome_app)
         elif suite == "gnome_classic":
-            for next_app in ["finder", "video-player", "system-settings", "system-monitor"]:
+            for next_app in ["finder", "video-player", "system-settings", "system-monitor", "calculator"]:
                 if next_app in pkgs:
                     pkgs.remove(next_app)
+            for gnome_app in ["gnome-control-center", "nautilus", "totem", "gnome-system-monitor"]:
+                if gnome_app not in pkgs:
+                    pkgs.append(gnome_app)
 
         return {
             "pkgs": pkgs,
@@ -6561,6 +6564,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                             subprocess.run(["chroot", "/mnt", "pacman", "-Rdd", "--noconfirm", "nautilus", "totem", "gnome-control-center", "gnome-system-monitor"], capture_output=True)
                         except Exception:
                             pass
+                    elif getattr(self, "selected_app_suite", "pulsar_next") == "gnome_classic":
+                        log_msg("Desktop Suite: Classic GNOME selected — removing Next apps...")
+                        try:
+                            subprocess.run(["chroot", "/mnt", "pacman", "-Rdd", "--noconfirm", "finder", "video-player", "system-settings", "system-monitor", "calculator"], capture_output=True)
+                        except Exception:
+                            pass
                     if want_extras:
                         pkg_info = self._get_selected_packages_info(is_arch=True)
                         extra_packages = list(pkg_info["pkgs"])
@@ -6753,6 +6762,12 @@ class RecoveryWindow(Adw.ApplicationWindow):
                         log_msg("Desktop Suite: Pulsar Next Experience selected — removing GNOME duplicate apps...")
                         try:
                             subprocess.run(["chroot", "/mnt", "apt-get", "remove", "-y", "--purge", "nautilus", "totem", "gnome-control-center", "gnome-system-monitor"], capture_output=True)
+                        except Exception:
+                            pass
+                    elif getattr(self, "selected_app_suite", "pulsar_next") == "gnome_classic":
+                        log_msg("Desktop Suite: Classic GNOME selected — removing Next apps...")
+                        try:
+                            subprocess.run(["chroot", "/mnt", "apt-get", "remove", "-y", "--purge", "finder", "video-player", "system-settings", "system-monitor", "calculator"], capture_output=True)
                         except Exception:
                             pass
                     if want_extras:

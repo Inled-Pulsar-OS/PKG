@@ -34,6 +34,8 @@
 #include "views.hpp"
 #include "volumes.hpp"
 #include "tag_manager.hpp"
+#include <fstream>
+#include <sstream>
 #include <iostream>
 #include <mayonnaise/i18n.hpp>
 
@@ -550,6 +552,143 @@ int main(int argc, char** argv) {
         if (!p.empty() && fs::is_directory(p, ec)) favorites.push_back({p, title});
     }
 
+    std::vector<Place> customFavorites;
+    std::function<void()> rebuildSidebar;
+
+    auto bookmarksPath = [] {
+        const char* h = std::getenv("HOME");
+        std::string base = h ? h : "/home/jaime";
+        return base + "/.config/gtk-3.0/bookmarks";
+    };
+
+    auto loadCustomFavorites = [&] {
+        customFavorites.clear();
+        std::string bp = bookmarksPath();
+        std::ifstream in(bp);
+        if (in.is_open()) {
+            std::string line;
+            while (std::getline(in, line)) {
+                if (line.empty() || line[0] == '#') continue;
+                std::string path;
+                std::string title;
+                if (line.starts_with("file://")) {
+                    size_t sp = line.find(' ');
+                    if (sp != std::string::npos) {
+                        path = line.substr(7, sp - 7);
+                        title = line.substr(sp + 1);
+                    } else {
+                        path = line.substr(7);
+                    }
+                } else {
+                    size_t sp = line.find(' ');
+                    if (sp != std::string::npos) {
+                        path = line.substr(0, sp);
+                        title = line.substr(sp + 1);
+                    } else {
+                        path = line;
+                    }
+                }
+                std::error_code ec;
+                if (!path.empty() && fs::is_directory(path, ec)) {
+                    if (title.empty()) title = fs::path(path).filename().string();
+                    bool dup = false;
+                    for (const auto& fav : favorites) { if (fav.path == path) { dup = true; break; } }
+                    for (const auto& cf : customFavorites) { if (cf.path == path) { dup = true; break; } }
+                    if (!dup) customFavorites.push_back({path, title});
+                }
+            }
+        }
+    };
+
+    auto saveCustomFavorites = [&] {
+        std::string bp = bookmarksPath();
+        std::error_code ec;
+        fs::create_directories(fs::path(bp).parent_path(), ec);
+        std::ofstream out(bp);
+        if (out.is_open()) {
+            for (const auto& f : customFavorites) {
+                out << "file://" << f.path << " " << f.title << "\n";
+            }
+        }
+    };
+
+    auto addFavorite = [&](const std::string& folderPath, const std::string& name = "") {
+        std::error_code ec;
+        if (!fs::is_directory(folderPath, ec)) return;
+        for (const auto& f : customFavorites) {
+            if (f.path == folderPath) return;
+        }
+        for (const auto& f : favorites) {
+            if (f.path == folderPath) return;
+        }
+        std::string title = name.empty() ? fs::path(folderPath).filename().string() : name;
+        customFavorites.push_back({folderPath, title});
+        saveCustomFavorites();
+        if (rebuildSidebar) rebuildSidebar();
+    };
+
+    auto removeFavorite = [&](const std::string& folderPath) {
+        auto it = std::remove_if(customFavorites.begin(), customFavorites.end(),
+                                 [&](const Place& p) { return p.path == folderPath; });
+        if (it != customFavorites.end()) {
+            customFavorites.erase(it, customFavorites.end());
+            saveCustomFavorites();
+            if (rebuildSidebar) rebuildSidebar();
+        }
+    };
+
+    loadCustomFavorites();
+
+    // Per-folder View Settings ------------------------------------------------------------------
+    struct FolderViewConfig {
+        std::string mode = "icons";
+        bool foldersFirst = true;
+        std::string sortBy = "name";
+        bool sortAscending = true;
+    };
+    std::unordered_map<std::string, FolderViewConfig> folderConfigs;
+
+    auto folderViewsConfigPath = [] {
+        const char* h = std::getenv("HOME");
+        std::string base = h ? h : "/home/jaime";
+        return base + "/.config/mayonnaise/finder/folder_views.txt";
+    };
+
+    auto loadFolderConfigs = [&] {
+        std::ifstream in(folderViewsConfigPath());
+        if (!in.is_open()) return;
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line.empty() || line[0] == '#') continue;
+            auto pos1 = line.find('\t');
+            if (pos1 == std::string::npos) continue;
+            std::string p = line.substr(0, pos1);
+            std::string rest = line.substr(pos1 + 1);
+            std::istringstream iss(rest);
+            FolderViewConfig cfg;
+            std::string ff, sa;
+            if (iss >> cfg.mode >> ff >> cfg.sortBy >> sa) {
+                cfg.foldersFirst = (ff == "1" || ff == "true");
+                cfg.sortAscending = (sa == "1" || sa == "true");
+                folderConfigs[p] = cfg;
+            }
+        }
+    };
+
+    auto saveFolderConfigs = [&] {
+        std::string cp = folderViewsConfigPath();
+        std::error_code ec;
+        fs::create_directories(fs::path(cp).parent_path(), ec);
+        std::ofstream out(cp);
+        if (!out.is_open()) return;
+        for (const auto& [p, cfg] : folderConfigs) {
+            out << p << "\t" << cfg.mode << "\t" << (cfg.foldersFirst ? "1" : "0")
+                << "\t" << cfg.sortBy << "\t" << (cfg.sortAscending ? "1" : "0") << "\n";
+        }
+    };
+
+    loadFolderConfigs();
+
     // Widgets ----------------------------------------------------------------------------------
     std::function<void()> updateAfterPreview;
     PreviewCache previews(app, [&] {
@@ -600,14 +739,38 @@ int main(int argc, char** argv) {
     auto pickerCancel = Button(tr("Cancel")).minWidth(100).height(34).onClick([&] {
         std::exit(1);
     });
-    auto pickerFilenameField = TextField(tr("File name:")).width(260);
-    if (!saveFilename.empty()) pickerFilenameField.setText(saveFilename);
+    auto pickerFilenameField = TextField(tr("File name:")).width(260).selectBaseNameOnly(true);
+    if (!saveFilename.empty()) {
+        pickerFilenameField.setText(saveFilename);
+        pickerFilenameField.node()->selectBaseName();
+    }
     auto submitPicker = [&] {
         if (!pickerMode) return;
         if (saveMode) {
             std::string name = pickerFilenameField.value();
             if (name.empty()) name = saveFilename.empty() ? "Untitled" : saveFilename;
-            std::cout << (fs::path(browser->path) / name).string() << std::endl;
+            fs::path targetPath = fs::path(browser->path) / name;
+            std::error_code ec;
+            if (fs::exists(targetPath, ec)) {
+                std::string titleStr = tr("“%1” already exists. Do you want to replace it?");
+                auto p = titleStr.find("%1");
+                if (p != std::string::npos) titleStr.replace(p, 2, name);
+                auto confirmAlert = std::make_shared<AlertView>(
+                    titleStr,
+                    tr("A file with the same name already exists in this location. Replacing it will overwrite its current contents."),
+                    std::vector<AlertButton>{
+                        {tr("Cancel"), {}},
+                        {tr("Replace"), [targetPath] {
+                            std::cout << targetPath.string() << std::endl;
+                            std::exit(0);
+                        }, ButtonStyle::Destructive}
+                    }, true);
+                if (auto* h = pickerFilenameField.node()->host()) {
+                    confirmAlert->show(*h);
+                    return;
+                }
+            }
+            std::cout << targetPath.string() << std::endl;
             std::exit(0);
         } else if (chooseFolder) {
             auto sel = browser->selectedPaths();
@@ -910,6 +1073,10 @@ int main(int argc, char** argv) {
     };
 
     // Navigation ----------------------------------------------------------------------------------
+    std::function<void(ViewMode, bool)> setModeFunc;
+    auto setMode = [&](ViewMode m, bool recordForFolder = true) {
+        if (setModeFunc) setModeFunc(m, recordForFolder);
+    };
     std::function<void(const std::string&, const std::string&, bool)> navigateTo;
     navigateTo = [&](const std::string& rawPath, const std::string& select, bool recordHistory) {
         std::string path = rawPath;
@@ -963,6 +1130,20 @@ int main(int argc, char** argv) {
             listScroll.scrollTo({0, 0}, false);
             browser->cut.clear();
             clipboard.cut = clipboard.cut && !clipboard.paths.empty();
+
+            // Apply per-folder view settings if recorded
+            auto it = folderConfigs.find(path);
+            if (it != folderConfigs.end()) {
+                const auto& cfg = it->second;
+                ViewMode targetMode = (cfg.mode == "list" ? ViewMode::List : cfg.mode == "columns" ? ViewMode::Columns : ViewMode::Icons);
+                if (targetMode != mode) setMode(targetMode, false);
+                browser->sort.foldersFirst = cfg.foldersFirst;
+                if (cfg.sortBy == "modified") browser->sort.key = SortKey::Modified;
+                else if (cfg.sortBy == "size") browser->sort.key = SortKey::Size;
+                else if (cfg.sortBy == "kind") browser->sort.key = SortKey::Kind;
+                else browser->sort.key = SortKey::Name;
+                browser->sort.ascending = cfg.sortAscending;
+            }
         }
         browser->selection.clear();
         browser->lead = browser->anchor = {};
@@ -1009,7 +1190,7 @@ int main(int argc, char** argv) {
         if (parent != browser->path) navigateTo(parent, browser->path, true);
     };
 
-    auto setMode = [&](ViewMode m) {
+    setModeFunc = [&](ViewMode m, bool recordForFolder) {
         if (auto* v = currentView(); v && v->isRenaming()) focusView();
         mode = m;
         if (activeTab < tabs.size()) {
@@ -1021,6 +1202,11 @@ int main(int argc, char** argv) {
         columnScroll.setHidden(m != ViewMode::Columns);
         viewControl->setSelected(static_cast<int>(m));
         prefs.set("view", m == ViewMode::Icons ? "icons" : m == ViewMode::List ? "list" : "columns");
+        if (recordForFolder && !browser->path.empty() && browser->path != kRecents && !browser->path.starts_with("tag:")) {
+            auto& cfg = folderConfigs[browser->path];
+            cfg.mode = (m == ViewMode::Icons ? "icons" : m == ViewMode::List ? "list" : "columns");
+            saveFolderConfigs();
+        }
         if (m == ViewMode::Columns) columnBrowser->rebuild(true);
         else focusView();
         updateEmptyState();
@@ -1489,6 +1675,17 @@ int main(int argc, char** argv) {
             tabs[activeTab].lead = browser->lead;
             tabs[activeTab].anchor = browser->anchor;
         }
+        if (pickerMode && saveMode) {
+            auto sel = browser->selectedPaths();
+            if (!sel.empty()) {
+                std::error_code ec;
+                if (!fs::is_directory(sel.front(), ec)) {
+                    std::string fname = fs::path(sel.front()).filename().string();
+                    pickerFilenameField.setText(fname);
+                    pickerFilenameField.node()->selectBaseName();
+                }
+            }
+        }
         updateStatus();
         if (mode == ViewMode::Columns) columnBrowser->rebuild(false);
         if (quickLook->isShown()) {
@@ -1502,6 +1699,13 @@ int main(int argc, char** argv) {
         prefs.set("sortBy", kSortNames[static_cast<int>(browser->sort.key)]);
         prefs.set("sortAscending", browser->sort.ascending);
         prefs.set("foldersOnTop", browser->sort.foldersFirst);
+        if (!browser->path.empty() && browser->path != kRecents && !browser->path.starts_with("tag:")) {
+            auto& cfg = folderConfigs[browser->path];
+            cfg.foldersFirst = browser->sort.foldersFirst;
+            cfg.sortBy = kSortNames[static_cast<int>(browser->sort.key)];
+            cfg.sortAscending = browser->sort.ascending;
+            saveFolderConfigs();
+        }
         if (syncSettings) syncSettings();
         reload();
         if (browser->searching) {
@@ -1880,6 +2084,9 @@ int main(int argc, char** argv) {
         items.push_back(MenuItem::separator());
         items.push_back(MenuItem(tr("Open in Terminal"), openTerminalHere).withIcon(Icon::Terminal));
         items.push_back(MenuItem(tr("Copy Path"), copyPath).withShortcut("Ctrl+Alt+C").disabled(!isRealFolder()));
+        if (isRealFolder()) {
+            items.push_back(MenuItem(tr("Add to Sidebar"), [&] { addFavorite(browser->path); }).withIcon(Icon::Plus));
+        }
         items.push_back(MenuItem::separator());
         items.push_back(MenuItem(tr("Get Info"), showInfo).withIcon(Icon::Info).withShortcut("Ctrl+I").disabled(!isRealFolder()));
         items.push_back(MenuItem(tr("Properties"), showInfo).withIcon(Icon::Gear).withShortcut("Ctrl+I").disabled(!isRealFolder()));
@@ -2015,6 +2222,7 @@ int main(int argc, char** argv) {
         items.push_back(MenuItem::separator());
         if (!isRealFolder()) items.push_back(MenuItem(tr("Show in Enclosing Folder"), showInEnclosingFolder).withShortcut("Ctrl+R").disabled(!single));
         if (first && first->isDir) {
+            items.push_back(MenuItem(tr("Add to Sidebar"), [&, p = first->path] { addFavorite(p); }).withIcon(Icon::Plus));
             items.push_back(MenuItem(tr("Open in New Tab"), [&, p = first->path] { newTab(p); }).withIcon(Icon::FolderPlus));
             items.push_back(MenuItem(tr("Open in Terminal"), openTerminalHere).withIcon(Icon::Terminal));
         }
@@ -2074,10 +2282,11 @@ int main(int argc, char** argv) {
         actionMenu.setItems(std::move(items));
     };
     // Sidebar ----------------------------------------------------------------------------------------------
-    auto rebuildSidebar = [&] {
+    rebuildSidebar = [&] {
         std::vector<SidebarItem> items{SidebarItem::header(tr("Favorites"))};
         items.emplace_back("applications://pulsar", Icon::Folder, tr("Applications"));
         for (const auto& f : favorites) items.emplace_back(f.path, placeIcon(f.path), f.title);
+        for (const auto& f : customFavorites) items.emplace_back(f.path, placeIcon(f.path), f.title);
         items.push_back(SidebarItem::header(tr("Locations")));
         items.emplace_back("/", Icon::HardDrive, tr("Computer"));
         for (const auto& v : mountedVolumes()) {
@@ -2205,6 +2414,21 @@ int main(int argc, char** argv) {
         removeVolume(id);
     });
     ejectButton.onClick([&] { if (const auto* v = deviceForPath(browser->path)) removeVolume(v->id); });
+    sidebar.onContextMenu([&](const std::string& id, Point at) {
+        bool isCustom = false;
+        for (const auto& cf : customFavorites) {
+            if (cf.path == id) { isCustom = true; break; }
+        }
+        if (isCustom) {
+            menu->setItems({
+                MenuItem(tr("Remove from Sidebar"), [&, id] { removeFavorite(id); }).withIcon(Icon::Trash)
+            });
+            menu->setGap(2);
+            page->menuAnchor->arrange({at.x, at.y, 1, 1});
+            menu->showFrom(*page->menuAnchor);
+            if (auto* h = page->host()) h->setFocus(menu.get(), false);
+        }
+    });
     sidebar.onSelect([&](std::string id) {
         if (id.empty()) return;
         if (id == "applications://pulsar") {

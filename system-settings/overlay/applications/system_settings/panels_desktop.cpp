@@ -346,7 +346,27 @@ Element backgroundSection(Context& ctx) {
     auto picker = ui::pickerRow("Picture Position", options,
                                 {{"Zoom", "zoom"}, {"Centered", "centered"}, {"Scaled", "scaled"},
                                  {"Stretched", "stretched"}, {"Spanned", "spanned"}, {"Wallpaper", "wallpaper"}});
-    return ui::section("Background", {FormRow(grid).padding(Insets(10, 8)), picker, FormRow(HStack({Spacer(), add}))});
+
+    auto liveWallpaperBtn = Button("Choose Video…");
+    liveWallpaperBtn.onClick([] {
+        gx::run({"/bin/sh", "-c", "/usr/bin/pulsaros-live-wallpaper set-dialog"});
+    });
+    auto stopLiveWallpaperBtn = Button("Stop");
+    stopLiveWallpaperBtn.onClick([] {
+        gx::run({"/bin/sh", "-c", "/usr/bin/pulsaros-live-wallpaper stop"});
+    });
+    auto liveRow = FormRow("Animated & Video Wallpaper",
+                           HStack({liveWallpaperBtn, stopLiveWallpaperBtn}).spacing(8).align(Alignment::Center),
+                           "Animated video wallpapers (.mp4, .webm) synchronized across Desktop, SDDM, and Lockscreen");
+
+    auto downloadAppleBtn = Button("Download Collection…");
+    downloadAppleBtn.onClick([] {
+        gx::run({"/usr/bin/pulsaros-download-wallpapers"});
+    });
+    auto downloadAppleRow = FormRow("macOS 5K/6K Wallpaper Collection", downloadAppleBtn,
+                                    "Download official dynamic Apple wallpapers from Mac OS X to macOS Tahoe");
+
+    return ui::section("Background", {FormRow(grid).padding(Insets(10, 8)), picker, liveRow, downloadAppleRow, FormRow(HStack({Spacer(), add}))});
 }
 
 // Appearance: fonts and themes ------------------------------------------------------------------------------
@@ -468,6 +488,99 @@ std::string fileUri(const std::string& path) { return ::fileUri(path); }
 bool isImage(const std::string& path) { return ::isImage(path); }
 }  // namespace shared
 
+Element pulsarFeaturesSection() {
+    std::vector<Element> rows;
+
+    // 1. macOS Keyboard Remap (Cmd as Ctrl)
+    bool remapActive = false;
+    auto remapRes = gx::runSync({"/bin/sh", "-c", "gsettings get org.gnome.desktop.input-sources xkb-options 2>/dev/null"});
+    if (remapRes.out.find("swap_lalt_lwin") != std::string::npos || remapRes.out.find("altwin:swap_alt_win") != std::string::npos) {
+        remapActive = true;
+    }
+    auto remapToggle = Toggle("", remapActive);
+    remapToggle.onChange([](bool active) {
+        if (active) gx::run({"/usr/bin/pulsaros-toggle-remap", "macos"});
+        else gx::run({"/usr/bin/pulsaros-toggle-remap", "gnome"});
+    });
+    rows.push_back(FormRow("macOS Keyboard Remap (Cmd as Ctrl)", remapToggle,
+                           "Swap physical Control and Command/Super keys for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W)"));
+
+    // 2. macOS Fullscreen Spaces
+    gx::Key fsSpacesKey("org.gnome.shell.extensions.pulsaros-global-menu", "macos-fullscreen-spaces");
+    rows.push_back(ui::toggleRow("macOS Fullscreen Spaces", fsSpacesKey,
+                                 "Move maximized apps to dedicated workspaces and auto-hide the top bar"));
+
+    // 3. Notch (NotchNux Dynamic Island)
+    bool notchActive = false;
+    std::string notchUuid = "notchnux@adityasah.programs";
+    auto notchRes = gx::runSync({"/bin/sh", "-c", "gnome-extensions list --enabled 2>/dev/null"});
+    if (notchRes.out.find(notchUuid) != std::string::npos) notchActive = true;
+
+    auto notchToggle = Toggle("", notchActive);
+    notchToggle.onChange([notchUuid](bool active) {
+        if (active) gx::run({"gnome-extensions", "enable", notchUuid});
+        else gx::run({"gnome-extensions", "disable", notchUuid});
+    });
+    auto notchPrefsBtn = Button("Settings…");
+    notchPrefsBtn.onClick([notchUuid] {
+        gx::run({"gnome-extensions", "prefs", notchUuid});
+    });
+    rows.push_back(FormRow("Notch Dynamic Island", HStack({notchPrefsBtn, notchToggle}).spacing(8).align(Alignment::Center),
+                           "Show dynamic island, media controls and drop shelf in the top bar"));
+
+    // 4. Liquid Glass Desktop Effects
+    bool lgActive = false;
+    std::string lgUuid = "liquid-glass@thinkingcoding1231.gmail.com";
+    if (notchRes.out.find(lgUuid) != std::string::npos) lgActive = true;
+    auto lgToggle = Toggle("", lgActive);
+    lgToggle.onChange([lgUuid](bool active) {
+        if (active) {
+            gx::run({"gnome-extensions", "enable", lgUuid});
+            gx::run({"gnome-extensions", "disable", "blur-my-shell@aunetx"});
+        } else {
+            gx::run({"gnome-extensions", "disable", lgUuid});
+            gx::run({"gnome-extensions", "enable", "blur-my-shell@aunetx"});
+        }
+    });
+
+    int lgStyleIdx = 0;
+    auto lgStyleRes = gx::runSync({"/usr/bin/pulsaros-set-liquid-glass-style", "status"});
+    if (lgStyleRes.out.find("classic") != std::string::npos) lgStyleIdx = 1;
+    auto lgStylePicker = Picker({"Vibrant (Tahoe)", "Classic (Frosted)"}, lgStyleIdx);
+    lgStylePicker.onChange([](int idx) {
+        if (idx == 0) gx::run({"/usr/bin/pulsaros-set-liquid-glass-style", "new"});
+        else gx::run({"/usr/bin/pulsaros-set-liquid-glass-style", "classic"});
+    });
+    auto lgPrefsBtn = Button("Settings…");
+    lgPrefsBtn.onClick([lgUuid] {
+        gx::run({"gnome-extensions", "prefs", lgUuid});
+    });
+    rows.push_back(FormRow("Liquid Glass Desktop Effects", HStack({lgStylePicker, lgPrefsBtn, lgToggle}).spacing(8).align(Alignment::Center),
+                           "Translucent frosted blur for windows, dock, menus and panel"));
+
+    // 5. Cursors
+    auto tahoeCursorBtn = Button("Apply Tahoe");
+    tahoeCursorBtn.onClick([] {
+        gx::Key(kInterface, "cursor-theme").setString("MacTahoe-light");
+    });
+    auto adwaitaCursorBtn = Button("Apply Adwaita");
+    adwaitaCursorBtn.onClick([] {
+        gx::Key(kInterface, "cursor-theme").setString("Adwaita");
+    });
+    rows.push_back(FormRow("Mouse & Trackpad Cursors", HStack({tahoeCursorBtn, adwaitaCursorBtn}).spacing(8).align(Alignment::Center),
+                           "Official Tahoe cursor style with dynamic drop shadows or classic Adwaita"));
+
+    // 6. Shell Layout Restore
+    auto restoreLayoutBtn = Button("Restore Layout");
+    restoreLayoutBtn.onClick([] {
+        gx::run({"/usr/bin/pulsaros-restore-shell-layout"});
+    });
+    rows.push_back(FormRow("Shell Layout & Desktop", restoreLayoutBtn,
+                           "Realigns clock to right, notifications to top-right and reloads top bar items"));
+
+    return ui::section("Desktop Experience & macOS Style", rows);
+}
+
 Element appearancePanel(Context& ctx) {
     if (desk::kde()) return kde::appearancePanel(ctx);
     if (ctx.demo == "fonts") {
@@ -479,6 +592,7 @@ Element appearancePanel(Context& ctx) {
     }
     std::vector<Element> sections{styleSection()};
     if (auto bg = backgroundSection(ctx)) sections.push_back(bg);
+    sections.push_back(pulsarFeaturesSection());
     sections.push_back(fontsSection());
     sections.push_back(themesSection());
     return ui::page(sections);
