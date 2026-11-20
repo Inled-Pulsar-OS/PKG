@@ -9,6 +9,7 @@
 
 #include <mayonnaise/ui_translation.hpp>
 
+#include <clocale>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -64,6 +65,13 @@ inline Language detectLanguage() {
             if (stop == std::string_view::npos) break;
             start = stop + 1;
         }
+    }
+    if (const char* loc = std::setlocale(LC_ALL, nullptr)) {
+        const std::string_view code = languageCode(loc);
+        if (code == "es") return Language::Spanish;
+        if (code == "fr") return Language::French;
+        if (code == "it") return Language::Italian;
+        if (code == "zh") return Language::Chinese;
     }
     return Language::English;
 }

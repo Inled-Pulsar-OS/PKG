@@ -15,6 +15,7 @@
 // Screenshot runs (MAYO_SCREENSHOT) and SETTINGS_READ_ONLY=1 never change the system.
 #include <mayonnaise/mayonnaise.hpp>
 
+#include <clocale>
 #include <cstdlib>
 #include <map>
 #include <vector>
@@ -26,6 +27,7 @@
 using namespace mayo;
 
 int main(int argc, char** argv) {
+    std::setlocale(LC_ALL, "");
     forma::localizeUi();
     App app("system-settings", MAYO_DESKTOP_ID);
     auto& prefs = app.settings();
@@ -69,7 +71,7 @@ int main(int argc, char** argv) {
             // Groups are separated by an untitled header (a gap), like System Settings.
             if (q.empty() && group != -1 && p.group != group) items.push_back(SidebarItem::header(""));
             group = p.group;
-            items.push_back(SidebarItem(p.id, p.icon, p.title).withTile(theme().colors.*p.tint));
+            items.push_back(SidebarItem(p.id, p.icon, mayo::uiText(p.title)).withTile(theme().colors.*p.tint));
         }
         sidebar.setItems(std::move(items));
         sidebar.selection(current);
@@ -86,7 +88,7 @@ int main(int argc, char** argv) {
         auto it = built.find(id);
         if (it == built.end()) it = built.emplace(id, info->build(ctx)).first;
         split.setDetail(it->second);
-        titleLabel.setText(info->title);
+        titleLabel.setText(mayo::uiText(info->title));
         window.setTitle(mayo::uiText(info->title) + " — " + mayo::uiText("Settings"));
         sidebar.selection(id);
         backButton.setDisabled(back.empty());

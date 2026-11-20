@@ -8,6 +8,7 @@
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <thread>
 
 #include "glib_support.hpp"
 #include "kconfig.hpp"
@@ -355,18 +356,62 @@ Element backgroundSection(Context& ctx) {
     stopLiveWallpaperBtn.onClick([] {
         gx::run({"/bin/sh", "-c", "/usr/bin/pulsaros-live-wallpaper stop"});
     });
-    auto liveRow = FormRow("Animated & Video Wallpaper",
-                           HStack({liveWallpaperBtn, stopLiveWallpaperBtn}).spacing(8).align(Alignment::Center),
-                           "Animated video wallpapers (.mp4, .webm) synchronized across Desktop, SDDM, and Lockscreen");
+    auto liveRow = FormRow("Animated & Video Wallpaper", liveWallpaperBtn,
+                           "Video wallpapers for desktop and lockscreen");
+    auto liveStopRow = FormRow("Stop Live Wallpaper", stopLiveWallpaperBtn,
+                               "Restore static picture wallpaper");
 
     auto downloadAppleBtn = Button("Download Collection…");
-    downloadAppleBtn.onClick([] {
-        gx::run({"/usr/bin/pulsaros-download-wallpapers"});
-    });
-    auto downloadAppleRow = FormRow("macOS 5K/6K Wallpaper Collection", downloadAppleBtn,
-                                    "Download official dynamic Apple wallpapers from Mac OS X to macOS Tahoe");
+    auto downloadProgress = ProgressBar(0.0f);
+    auto downloadStatus = Label("").font(TextStyle::Subheadline).secondary();
+    auto progressStack = HStack({downloadStatus, Spacer(), downloadProgress}).spacing(8).align(Alignment::Center);
 
-    return ui::section("Background", {FormRow(grid).padding(Insets(10, 8)), picker, liveRow, downloadAppleRow, FormRow(HStack({Spacer(), add}))});
+    downloadAppleBtn.onClick([app = &ctx.app, downloadAppleBtn, downloadProgress, downloadStatus]() mutable {
+        downloadAppleBtn.setDisabled(true);
+        downloadStatus.setText("Starting download…");
+        downloadProgress.setValue(0.0f);
+        std::thread([app, downloadAppleBtn, downloadProgress, downloadStatus]() mutable {
+            FILE* pipe = popen("/usr/bin/pulsaros-download-wallpapers", "r");
+            if (!pipe) {
+                app->post([downloadAppleBtn, downloadStatus]() mutable {
+                    downloadStatus.setText("Failed to start downloader");
+                    downloadAppleBtn.setDisabled(false);
+                });
+                return;
+            }
+            char buffer[256];
+            while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+                std::string line(buffer);
+                while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+                if (line.rfind("PROGRESS:", 0) == 0) {
+                    auto p1 = line.find(':', 9);
+                    if (p1 != std::string::npos) {
+                        float fraction = static_cast<float>(std::atof(line.substr(9, p1 - 9).c_str()));
+                        auto p2 = line.find(':', p1 + 1);
+                        std::string progressInfo = p2 != std::string::npos ? line.substr(p1 + 1, p2 - p1 - 1) : "";
+                        std::string name = p2 != std::string::npos ? line.substr(p2 + 1) : "";
+                        std::string statusText = progressInfo.empty() ? name : (progressInfo + " · " + name);
+                        app->post([downloadProgress, downloadStatus, fraction, statusText]() mutable {
+                            downloadProgress.setValue(fraction);
+                            downloadStatus.setText(statusText);
+                        });
+                    }
+                }
+            }
+            pclose(pipe);
+            app->post([downloadAppleBtn, downloadProgress, downloadStatus]() mutable {
+                downloadProgress.setValue(1.0f);
+                downloadStatus.setText("Download completed!");
+                downloadAppleBtn.setDisabled(false);
+            });
+        }).detach();
+    });
+
+    auto downloadAppleRow = FormRow("macOS Wallpaper Collection", downloadAppleBtn,
+                                    "Official dynamic Apple 5K/6K wallpapers");
+    auto progressRow = FormRow(progressStack);
+
+    return ui::section("Background", {FormRow(grid).padding(Insets(10, 8)), picker, liveRow, liveStopRow, downloadAppleRow, progressRow, FormRow(HStack({Spacer(), add}))});
 }
 
 // Appearance: fonts and themes ------------------------------------------------------------------------------
@@ -503,12 +548,12 @@ Element pulsarFeaturesSection() {
         else gx::run({"/usr/bin/pulsaros-toggle-remap", "gnome"});
     });
     rows.push_back(FormRow("macOS Keyboard Remap (Cmd as Ctrl)", remapToggle,
-                           "Swap physical Control and Command/Super keys for standard macOS shortcuts (Cmd+C, Cmd+V, Cmd+W)"));
+                           "Swap Control and Command for standard macOS shortcuts"));
 
     // 2. macOS Fullscreen Spaces
     gx::Key fsSpacesKey("org.gnome.shell.extensions.pulsaros-global-menu", "macos-fullscreen-spaces");
     rows.push_back(ui::toggleRow("macOS Fullscreen Spaces", fsSpacesKey,
-                                 "Move maximized apps to dedicated workspaces and auto-hide the top bar"));
+                                 "Move maximized apps to dedicated workspaces"));
 
     // 3. Notch (NotchNux Dynamic Island)
     bool notchActive = false;
@@ -521,12 +566,14 @@ Element pulsarFeaturesSection() {
         if (active) gx::run({"gnome-extensions", "enable", notchUuid});
         else gx::run({"gnome-extensions", "disable", notchUuid});
     });
-    auto notchPrefsBtn = Button("Settings…");
+    auto notchPrefsBtn = Button("Configure…");
     notchPrefsBtn.onClick([notchUuid] {
         gx::run({"gnome-extensions", "prefs", notchUuid});
     });
-    rows.push_back(FormRow("Notch Dynamic Island", HStack({notchPrefsBtn, notchToggle}).spacing(8).align(Alignment::Center),
-                           "Show dynamic island, media controls and drop shelf in the top bar"));
+    rows.push_back(FormRow("Notch Dynamic Island", notchToggle,
+                           "Dynamic island and drop shelf in top bar"));
+    rows.push_back(FormRow("Notch Preferences", notchPrefsBtn,
+                           "Configure size, media controls and behavior"));
 
     // 4. Liquid Glass Desktop Effects
     bool lgActive = false;
@@ -551,24 +598,27 @@ Element pulsarFeaturesSection() {
         if (idx == 0) gx::run({"/usr/bin/pulsaros-set-liquid-glass-style", "new"});
         else gx::run({"/usr/bin/pulsaros-set-liquid-glass-style", "classic"});
     });
-    auto lgPrefsBtn = Button("Settings…");
+    auto lgPrefsBtn = Button("Configure…");
     lgPrefsBtn.onClick([lgUuid] {
         gx::run({"gnome-extensions", "prefs", lgUuid});
     });
-    rows.push_back(FormRow("Liquid Glass Desktop Effects", HStack({lgStylePicker, lgPrefsBtn, lgToggle}).spacing(8).align(Alignment::Center),
-                           "Translucent frosted blur for windows, dock, menus and panel"));
+    rows.push_back(FormRow("Liquid Glass Desktop Effects", lgToggle,
+                           "Translucent frosted blur for desktop elements"));
+    rows.push_back(FormRow("Liquid Glass Style", lgStylePicker,
+                           "Choose between Tahoe vibrancy and classic frosted blur"));
+    rows.push_back(FormRow("Liquid Glass Preferences", lgPrefsBtn,
+                           "Adjust opacity, corner radius and shadows"));
 
     // 5. Cursors
-    auto tahoeCursorBtn = Button("Apply Tahoe");
-    tahoeCursorBtn.onClick([] {
-        gx::Key(kInterface, "cursor-theme").setString("MacTahoe-light");
+    std::string curCursor = gx::Key(kInterface, "cursor-theme").getString();
+    int curIdx = (curCursor.find("Tahoe") != std::string::npos || curCursor.find("tahoe") != std::string::npos) ? 0 : 1;
+    auto cursorPicker = Picker({"Tahoe (macOS)", "Adwaita (GNOME)"}, curIdx);
+    cursorPicker.onChange([](int idx) {
+        if (idx == 0) gx::Key(kInterface, "cursor-theme").setString("MacTahoe-light");
+        else gx::Key(kInterface, "cursor-theme").setString("Adwaita");
     });
-    auto adwaitaCursorBtn = Button("Apply Adwaita");
-    adwaitaCursorBtn.onClick([] {
-        gx::Key(kInterface, "cursor-theme").setString("Adwaita");
-    });
-    rows.push_back(FormRow("Mouse & Trackpad Cursors", HStack({tahoeCursorBtn, adwaitaCursorBtn}).spacing(8).align(Alignment::Center),
-                           "Official Tahoe cursor style with dynamic drop shadows or classic Adwaita"));
+    rows.push_back(FormRow("Mouse & Trackpad Cursors", cursorPicker,
+                           "Tahoe cursor with drop shadow or classic Adwaita"));
 
     // 6. Shell Layout Restore
     auto restoreLayoutBtn = Button("Restore Layout");
@@ -576,7 +626,7 @@ Element pulsarFeaturesSection() {
         gx::run({"/usr/bin/pulsaros-restore-shell-layout"});
     });
     rows.push_back(FormRow("Shell Layout & Desktop", restoreLayoutBtn,
-                           "Realigns clock to right, notifications to top-right and reloads top bar items"));
+                           "Reset top bar, clock and desktop layout to defaults"));
 
     return ui::section("Desktop Experience & macOS Style", rows);
 }
