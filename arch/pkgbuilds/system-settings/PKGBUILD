@@ -1,7 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=system-settings
 pkgver=0.1.0
-pkgrel=7
+pkgrel=8
 pkgdesc="macOS-style System Settings for Pulsar OS"
 arch=('x86_64')
 url="https://github.com/skjsbsnq/Forma"
@@ -15,8 +15,8 @@ optdepends=('vulkan-icd-loader: Vulkan renderer (OpenGL otherwise)'
             'upower: battery information'
             'power-profiles-daemon: power modes'
             'accountsservice: user accounts')
-provides=('gnome-control-center' 'mayo-system-settings-git')
-conflicts=('gnome-control-center' 'mayo-system-settings-git' 'forma-settings')
+provides=('mayo-system-settings-git')
+conflicts=('mayo-system-settings-git' 'forma-settings')
 replaces=('forma-settings')
 options=('!strip')
 

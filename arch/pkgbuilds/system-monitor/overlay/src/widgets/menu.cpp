@@ -16,7 +16,7 @@ constexpr float kPanelPad = 5;
 constexpr float kSeparatorH = 11;
 constexpr float kTextPad = 10;
 constexpr float kColumn = 18;
-constexpr float kDetailGap = 8;  // space between a title and its detail ("Recommended")
+constexpr float kDetailGap = 8;  // space between a title and its detail ("推荐")
 constexpr float kSubmenuWidth = 13;  // room for the submenu chevron
 
 /// Shared bezel for pop-up / pull-down buttons (matches ButtonStyle::Default).
@@ -46,10 +46,7 @@ void MenuView::setItems(std::vector<MenuItem> items) {
 void MenuView::setHighlighted(int index) {
     if (index == m_highlighted) return;
     m_highlighted = index;
-    // Hovering a row with a submenu opens it beside the row; anything else closes the open one.
-    if (index >= 0 && index < static_cast<int>(m_items.size()) && m_items[static_cast<size_t>(index)].hasSubmenu()) {
-        showSubmenu(index);
-    } else {
+    if (index < 0 || (index < static_cast<int>(m_items.size()) && !m_items[static_cast<size_t>(index)].hasSubmenu())) {
         closeSubmenu();
     }
     invalidate();
@@ -74,14 +71,13 @@ void MenuView::showSubmenu(int index) {
     m_submenuIndex = index;
     m_submenu = std::make_shared<MenuView>(m_items[static_cast<size_t>(index)].subitems);
     m_submenu->m_parentMenu = std::static_pointer_cast<MenuView>(shared_from_this());
-    m_submenu->setGap(0);
+    m_submenu->setGap(-4);
     m_submenu->setOnDismiss([weak = weak_from_this()] {
         if (auto parent = weak.lock()) parent->invalidate();
     });
-    // Hung from the row itself (not the whole parent menu) and overlapping it by the panel padding, as
-    // macOS's submenus do.
+    // Anchor to the row itself, placed to the right
     m_submenu->setAnchorRect(rowRect(index));
-    m_submenu->showFrom(*this);
+    m_submenu->showFrom(*this, PopupEdge::Right);
     // Keyboard focus stays with the parent menu so Up/Down keep moving there; Escape closes both.
     host()->setFocus(this, false);
 }
@@ -137,7 +133,38 @@ bool MenuView::onPointerDown(const PointerEvent& e) {
     return true;
 }
 
-void MenuView::onPointerMove(const PointerEvent& e) { setHighlighted(itemAt(e.position)); }
+void MenuView::onPointerMove(const PointerEvent& e) {
+    int index = itemAt(e.position);
+    if (index == m_highlighted) return;
+    m_highlighted = index;
+    invalidate();
+
+    m_submenuTimerGen++;
+    const uint64_t curGen = m_submenuTimerGen;
+
+    if (index >= 0 && index < static_cast<int>(m_items.size()) && m_items[static_cast<size_t>(index)].hasSubmenu()) {
+        if (m_submenu && m_submenuIndex == index && m_submenu->isShown()) return;
+        App::current().after(0.28, [weak = std::weak_ptr<MenuView>(std::static_pointer_cast<MenuView>(shared_from_this())), curGen, index] {
+            auto self = weak.lock();
+            if (!self || self->m_submenuTimerGen != curGen) return;
+            if (self->m_highlighted == index) {
+                self->showSubmenu(index);
+                self->invalidate();
+            }
+        });
+    } else {
+        if (m_submenu && m_submenu->isShown()) {
+            App::current().after(0.25, [weak = std::weak_ptr<MenuView>(std::static_pointer_cast<MenuView>(shared_from_this())), curGen] {
+                auto self = weak.lock();
+                if (!self || self->m_submenuTimerGen != curGen) return;
+                if (self->m_highlighted < 0 || !self->m_items[static_cast<size_t>(self->m_highlighted)].hasSubmenu()) {
+                    self->closeSubmenu();
+                    self->invalidate();
+                }
+            });
+        }
+    }
+}
 
 void MenuView::onPointerUp(const PointerEvent& e) {
     int i = itemAt(e.position);
@@ -146,7 +173,15 @@ void MenuView::onPointerUp(const PointerEvent& e) {
 }
 
 void MenuView::onPointerLeave() {
-    if (!m_submenu || !m_submenu->isShown()) setHighlighted(-1);
+    m_submenuTimerGen++;
+    const uint64_t curGen = m_submenuTimerGen;
+    App::current().after(0.30, [weak = std::weak_ptr<MenuView>(std::static_pointer_cast<MenuView>(shared_from_this())), curGen] {
+        auto self = weak.lock();
+        if (!self || self->m_submenuTimerGen != curGen) return;
+        if (!self->m_submenu || !self->m_submenu->isShown()) {
+            self->setHighlighted(-1);
+        }
+    });
 }
 
 void MenuView::activate(int index) {

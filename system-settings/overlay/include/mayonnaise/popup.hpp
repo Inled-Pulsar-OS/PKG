@@ -18,7 +18,7 @@ public:
     virtual void popupDismissed() {}
 };
 
-enum class PopupEdge : std::uint8_t { Below, Above };
+enum class PopupEdge : std::uint8_t { Below, Above, Right, Left };
 
 /// Base for floating glass panels anchored to a widget: positioning, clamping to the window,
 /// appear/dismiss animation, shadow and material.

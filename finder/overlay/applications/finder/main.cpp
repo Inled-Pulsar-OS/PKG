@@ -377,7 +377,7 @@ inline std::vector<NautilusScript> loadNautilusScripts(const fs::path& dir = fs:
     for (const auto& entry : fs::directory_iterator(dir, ec)) {
         if (ec) break;
         std::string filename = entry.path().filename().string();
-        if (filename.empty() || filename.front() == '.') continue;
+        if (filename.empty() || filename.front() == '.' || filename.back() == '~') continue;
         if (entry.is_directory(ec)) {
             NautilusScript sub;
             sub.name = filename;
@@ -386,10 +386,7 @@ inline std::vector<NautilusScript> loadNautilusScripts(const fs::path& dir = fs:
             sub.children = loadNautilusScripts(entry.path());
             if (!sub.children.empty()) scripts.push_back(std::move(sub));
         } else if (entry.is_regular_file(ec)) {
-            auto perms = entry.status(ec).permissions();
-            if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec)) != fs::perms::none) {
-                scripts.push_back({filename, entry.path().string(), false, {}});
-            }
+            scripts.push_back({filename, entry.path().string(), false, {}});
         }
     }
     std::sort(scripts.begin(), scripts.end(), [](const auto& a, const auto& b) {
@@ -413,9 +410,34 @@ inline void executeNautilusScript(const std::string& scriptPath, const std::stri
         setenv("NAUTILUS_SCRIPT_SELECTED_URIS", selectedUrisStr.c_str(), 1);
         std::string currentUri = "file://" + currentFolder;
         setenv("NAUTILUS_SCRIPT_CURRENT_URI", currentUri.c_str(), 1);
+        setenv("NAUTILUS_SCRIPT_WINDOW_GEOMETRY", "800x600", 1);
         
-        chdir(currentFolder.c_str());
-        execl("/bin/sh", "sh", "-c", scriptPath.c_str(), (char*)nullptr);
+        if (!currentFolder.empty()) {
+            chdir(currentFolder.c_str());
+        }
+
+        std::vector<char*> args;
+        args.push_back(const_cast<char*>(scriptPath.c_str()));
+        for (const auto& p : selectedPaths) {
+            args.push_back(const_cast<char*>(p.c_str()));
+        }
+        args.push_back(nullptr);
+
+        execv(scriptPath.c_str(), args.data());
+
+        // If direct execution fails (e.g. not +x or no shebang), execute via /bin/bash
+        std::vector<char*> bashArgs;
+        bashArgs.push_back(const_cast<char*>("/bin/bash"));
+        bashArgs.push_back(const_cast<char*>(scriptPath.c_str()));
+        for (const auto& p : selectedPaths) {
+            bashArgs.push_back(const_cast<char*>(p.c_str()));
+        }
+        bashArgs.push_back(nullptr);
+        execv("/bin/bash", bashArgs.data());
+
+        bashArgs[0] = const_cast<char*>("/bin/sh");
+        execv("/bin/sh", bashArgs.data());
+
         _exit(127);
     }
 }
@@ -739,6 +761,7 @@ int main(int argc, char** argv) {
     auto pickerCancel = Button(tr("Cancel")).minWidth(100).height(34).onClick([&] {
         std::exit(1);
     });
+    std::function<void()> doSubmitPicker;
     auto pickerFilenameField = TextField(tr("File name:")).width(260).selectBaseNameOnly(true);
     if (!saveFilename.empty()) {
         pickerFilenameField.setText(saveFilename);
@@ -787,6 +810,8 @@ int main(int argc, char** argv) {
             std::exit(0);
         }
     };
+    doSubmitPicker = submitPicker;
+    pickerFilenameField.onSubmit([&](const std::string&) { submitPicker(); });
     auto pickerSelect = Button(saveMode ? tr("Save") : tr("Open"))
                             .style(ButtonStyle::Prominent)
                             .minWidth(100)
@@ -2496,6 +2521,16 @@ int main(int argc, char** argv) {
 
     // Keyboard ------------------------------------------------------------------------------------------------
     window.onKey([&](const KeyEvent& e) {
+        if (pickerMode) {
+            if (e.key == Key::Escape) {
+                std::exit(1);
+                return true;
+            }
+            if (e.key == Key::Enter) {
+                if (doSubmitPicker) doSubmitPicker();
+                return true;
+            }
+        }
         const bool ctrl = e.primary();
         const bool shift = e.shift();
         if (e.alt() && !ctrl) {

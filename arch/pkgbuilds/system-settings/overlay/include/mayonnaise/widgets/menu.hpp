@@ -19,7 +19,7 @@ struct MenuItem {
     Icon icon = Icon::None;
     std::optional<Color> dot;
     std::string shortcut;  ///< display only, e.g. "Ctrl+C"
-    std::string detail;    ///< second text column after the title ("Recommended"), unlike the shortcut it isn't pushed right
+    std::string detail;    ///< second text column after the title ("推荐"), unlike the shortcut it isn't pushed right
     std::vector<MenuItem> subitems;  ///< submenu on hover; the item's action is ignored
     std::shared_ptr<ImageData> image;  ///< drawn like `icon`, 16 pt, when set
     bool enabled = true;
@@ -110,6 +110,7 @@ private:
     std::shared_ptr<MenuView> m_submenu;
     std::weak_ptr<MenuView> m_parentMenu;
     int m_submenuIndex = -1;
+    uint64_t m_submenuTimerGen = 0;
 };
 
 /// Pull-down menu button: a button with a chevron that opens a list of actions.

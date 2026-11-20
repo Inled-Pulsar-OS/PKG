@@ -110,6 +110,7 @@ private:
     std::shared_ptr<MenuView> m_submenu;
     std::weak_ptr<MenuView> m_parentMenu;
     int m_submenuIndex = -1;
+    uint64_t m_submenuTimerGen = 0;
 };
 
 /// Pull-down menu button: a button with a chevron that opens a list of actions.

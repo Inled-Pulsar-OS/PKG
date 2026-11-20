@@ -1739,8 +1739,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
                              "Browse the web to get help with your computer.", "safari")
         self.add_utility_row(self.listbox, "disk", "Disk Utility", 
                              "Repair or manage storage drives using Disk Utility.", "disk")
-        self.add_utility_row(self.listbox, "upgrade_next_apps", "Install Pulsar Next Apps",
-                             "Upgrade to Finder, QuickTime, System Settings, and Activity Monitor on an existing installation.", "logo")
+        self.add_utility_row(self.listbox, "manage_app_suites", "Manage Desktop Apps & Packs",
+                             "Install Pulsar Next apps, standard GNOME apps, keep both suites, or install curated packs.", "logo")
         self.add_utility_row(self.listbox, "packages", "Install Extra Packages",
                              "Install productivity apps, ONLYOFFICE, and media tools.", "logo")
         self.add_utility_row(self.listbox, "drivers", "Install Hardware Drivers",
@@ -1905,8 +1905,8 @@ class RecoveryWindow(Adw.ApplicationWindow):
             self._popen_as_user("seafari || epiphany || firefox")
         elif self.selected_action == "disk":
             subprocess.Popen("gparted || pkexec gparted || gnome-disks || gnome-disk-utility", shell=True)
-        elif self.selected_action == "upgrade_next_apps":
-            self._show_upgrade_next_dialog()
+        elif self.selected_action in ("manage_app_suites", "upgrade_next_apps"):
+            self._show_manage_app_suites_dialog()
         elif self.selected_action == "packages":
             self.install_extra_packages = True
             self.install_broadcom = False
@@ -1918,49 +1918,107 @@ class RecoveryWindow(Adw.ApplicationWindow):
         elif self.selected_action == "logs":
             self._open_logs_viewer()
 
-    def _show_upgrade_next_dialog(self):
-        """Show a confirmation dialog before upgrading to Next suite apps."""
+    def _show_manage_app_suites_dialog(self):
+        """Show an options dialog to select desktop app suite, coexistence, or package packs."""
         dialog = Adw.MessageDialog(
             transient_for=self,
-            heading="Install Pulsar Next Apps",
-            body=(
-                "This will install the native Pulsar Next desktop suite:\n\n"
-                "• <b>Finder</b> (macOS-style file manager &amp; native file chooser)\n"
-                "• <b>QuickTime Video Player</b> (hardware accelerated player)\n"
-                "• <b>System Settings</b> (macOS System Settings control panel)\n"
-                "• <b>Activity Monitor</b> (native macOS-style process monitor)\n"
-                "• <b>Calculator</b> (macOS scientific &amp; basic calculator)\n\n"
-                "Classic GNOME applications (Nautilus, Totem, Control Center, System Monitor) "
-                "will be replaced. Internet connection or local installation media required."
-            ),
+            heading="Manage Desktop Apps & Packs",
+            body="Choose which desktop application experience or software pack to configure:",
         )
         dialog.set_body_use_markup(True)
+
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content_box.set_margin_top(8)
+        content_box.set_margin_bottom(8)
+        content_box.set_margin_start(12)
+        content_box.set_margin_end(12)
+
+        # Suite selection group
+        group = Adw.PreferencesGroup()
+        group.set_title("Desktop Experience Suite")
+        group.set_description("Select an application suite or choose to keep both side-by-side:")
+
+        suites = [
+            ("pulsar_next", "Pulsar Next Suite (Finder, System Settings, Activity Monitor)", True),
+            ("standard_gnome", "Standard GNOME Suite (Nautilus, GNOME Settings, System Monitor)", False),
+            ("both", "Keep Both Suites (Next + Standard GNOME Side-by-Side)", False),
+            ("reinstall", "Reinstall & Repair Current Desktop Suite", False),
+        ]
+
+        check_group_leader = None
+        suite_checks = {}
+
+        for suite_id, suite_title, is_default in suites:
+            row = Adw.ActionRow()
+            row.set_title(suite_title)
+            check = Gtk.CheckButton()
+            if check_group_leader is None:
+                check_group_leader = check
+            else:
+                check.set_group(check_group_leader)
+            check.set_active(is_default)
+            row.add_prefix(check)
+            row.set_activatable_widget(check)
+            group.add(row)
+            suite_checks[suite_id] = check
+
+        content_box.append(group)
+
+        # Extra Packs group
+        pack_group = Adw.PreferencesGroup()
+        pack_group.set_title("Software Pack (Optional)")
+        pack_group.set_description("Optionally install an additional curated package pack:")
+
+        pack_combo_row = Adw.ComboRow()
+        pack_combo_row.set_title("Install Package Pack")
+        pack_store = Gtk.StringList()
+        pack_store.append("None (Suite only)")
+        pack_store.append("Developer Tools (git, gcc, base-devel, python)")
+        pack_store.append("Productivity & Office (LibreOffice, Evince)")
+        pack_store.append("Graphics & Multimedia (GIMP, Inkscape, VLC)")
+        pack_store.append("Gaming (Steam, GameMode)")
+        pack_combo_row.set_model(pack_store)
+        pack_combo_row.set_selected(0)
+        pack_group.add(pack_combo_row)
+
+        content_box.append(pack_group)
+
+        dialog.set_extra_child(content_box)
         dialog.add_response("cancel", "Cancel")
-        dialog.add_response("upgrade", "Install Next Apps")
-        dialog.set_response_appearance("upgrade", Adw.ResponseAppearance.SUGGESTED)
+        dialog.add_response("apply", "Apply Changes")
+        dialog.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
         dialog.set_response_appearance("cancel", Adw.ResponseAppearance.DEFAULT)
 
         def on_response(d, resp):
             d.destroy()
-            if resp == "upgrade":
-                self.progress_subtitle.set_label("Installing Pulsar Next applications...")
-                self.target_disk_name_lbl.set_label("Pulsar Next Experience")
+            if resp == "apply":
+                selected_suite = "pulsar_next"
+                for s_id, chk in suite_checks.items():
+                    if chk.get_active():
+                        selected_suite = s_id
+                        break
+                pack_idx = pack_combo_row.get_selected()
+                pack_keys = ["none", "dev", "office", "media", "gaming"]
+                selected_pack = pack_keys[pack_idx] if pack_idx < len(pack_keys) else "none"
+
+                self.progress_subtitle.set_label(f"Configuring desktop suite ({selected_suite})...")
+                self.target_disk_name_lbl.set_label("Pulsar Desktop Experience")
                 self.image.set_visible(True)
                 self.title_label.set_visible(True)
                 self.stack.set_visible_child_name("install_progress")
-                threading.Thread(target=self._upgrade_next_apps_backend, daemon=True).start()
+                threading.Thread(target=self._manage_app_suites_backend, args=(selected_suite, selected_pack), daemon=True).start()
 
         dialog.connect("response", on_response)
         dialog.present()
 
-    def _upgrade_next_apps_backend(self):
-        """Install Pulsar Next apps on an existing system or running installation."""
+    def _manage_app_suites_backend(self, suite_mode="pulsar_next", pack_name="none"):
+        """Install or reconfigure desktop app suites and packs on an existing system or running installation."""
         import datetime
         os.makedirs("/var/log/pulsaros", exist_ok=True)
-        log_file = "/var/log/pulsaros/next_apps.log"
+        log_file = "/var/log/pulsaros/app_suites.log"
         try:
             with open(log_file, "w") as lf:
-                lf.write(f"{datetime.datetime.now()} - Pulsar Next suite upgrade started\n")
+                lf.write(f"{datetime.datetime.now()} - Desktop suite configuration started (suite={suite_mode}, pack={pack_name})\n")
 
             def log_msg(msg):
                 ts = datetime.datetime.now().strftime("%H:%M:%S")
@@ -2012,10 +2070,39 @@ class RecoveryWindow(Adw.ApplicationWindow):
             next_pkgs = ["finder", "video-player", "system-settings", "system-monitor", "calculator"]
             gnome_pkgs = ["nautilus", "totem", "gnome-control-center", "gnome-system-monitor"]
 
+            pack_pkgs_arch = {
+                "dev": ["base-devel", "git", "python"],
+                "office": ["libreoffice-fresh", "evince"],
+                "media": ["gimp", "inkscape"],
+                "gaming": ["gamemode"],
+            }
+            pack_pkgs_deb = {
+                "dev": ["build-essential", "git", "python3"],
+                "office": ["libreoffice", "evince"],
+                "media": ["gimp", "inkscape"],
+                "gaming": ["gamemode"],
+            }
+
+            extra_pkgs = pack_pkgs_arch.get(pack_name, []) if is_arch else pack_pkgs_deb.get(pack_name, [])
+
             if is_arch:
-                log_msg("Removing classic GNOME applications...")
-                GLib.idle_add(self.update_progress, 0.20, "Removing classic GNOME applications...")
-                subprocess.run(prefix + ["pacman", "-Rdd", "--noconfirm"] + gnome_pkgs, capture_output=True)
+                if suite_mode == "pulsar_next":
+                    log_msg("Switching to Pulsar Next suite...")
+                    GLib.idle_add(self.update_progress, 0.20, "Removing conflicting classic apps if needed...")
+                    subprocess.run(prefix + ["pacman", "-Rdd", "--noconfirm"] + gnome_pkgs, capture_output=True)
+                    to_install = next_pkgs + extra_pkgs
+                elif suite_mode == "standard_gnome":
+                    log_msg("Switching to Standard GNOME suite...")
+                    GLib.idle_add(self.update_progress, 0.20, "Removing Pulsar Next apps...")
+                    subprocess.run(prefix + ["pacman", "-Rdd", "--noconfirm"] + next_pkgs, capture_output=True)
+                    to_install = gnome_pkgs + extra_pkgs
+                elif suite_mode == "both":
+                    log_msg("Installing both Pulsar Next and Standard GNOME suites side-by-side...")
+                    GLib.idle_add(self.update_progress, 0.20, "Configuring dual desktop suites...")
+                    to_install = next_pkgs + gnome_pkgs + extra_pkgs
+                else:  # reinstall
+                    log_msg("Reinstalling and repairing desktop packages...")
+                    to_install = next_pkgs + gnome_pkgs + extra_pkgs
 
                 GLib.idle_add(self.update_progress, 0.40, "Checking for local packages...")
                 candidate_dirs = [
@@ -2030,36 +2117,45 @@ class RecoveryWindow(Adw.ApplicationWindow):
                     if os.path.isdir(cd):
                         for f in glob.glob(f"{cd}/*.pkg.tar.zst"):
                             bname = os.path.basename(f)
-                            for np in next_pkgs:
+                            for np in to_install:
                                 if bname.startswith(f"{np}-"):
                                     local_files.append(f)
 
                 if local_files:
                     GLib.idle_add(self.update_progress, 0.60, f"Installing {len(local_files)} local package(s)...")
                     if target_root:
-                        staged_dir = "/mnt/tmp/pulsar-next-pkgs"
+                        staged_dir = "/mnt/tmp/pulsar-desktop-pkgs"
                         os.makedirs(staged_dir, exist_ok=True)
                         chroot_paths = []
                         for lf in local_files:
                             dst = os.path.join(staged_dir, os.path.basename(lf))
                             shutil.copy2(lf, dst)
-                            chroot_paths.append(f"/tmp/pulsar-next-pkgs/{os.path.basename(lf)}")
+                            chroot_paths.append(f"/tmp/pulsar-desktop-pkgs/{os.path.basename(lf)}")
                         subprocess.run(["chroot", "/mnt", "pacman", "-U", "--noconfirm", "--needed", "--overwrite", "*"] + chroot_paths, capture_output=True)
                         shutil.rmtree(staged_dir, ignore_errors=True)
                     else:
                         subprocess.run(["pacman", "-U", "--noconfirm", "--needed", "--overwrite", "*"] + local_files, capture_output=True)
 
-                GLib.idle_add(self.update_progress, 0.80, "Ensuring all Next apps installed from repository...")
-                subprocess.run(prefix + ["pacman", "-Sy", "--noconfirm", "--needed", "--overwrite", "*"] + next_pkgs, capture_output=True)
+                GLib.idle_add(self.update_progress, 0.80, "Ensuring all packages installed from repository...")
+                subprocess.run(prefix + ["pacman", "-Sy", "--noconfirm", "--needed", "--overwrite", "*"] + to_install, capture_output=True)
 
             elif is_debian:
-                log_msg("Removing classic GNOME applications via apt...")
-                GLib.idle_add(self.update_progress, 0.20, "Removing classic GNOME applications...")
-                subprocess.run(prefix + ["apt-get", "remove", "-y", "--purge"] + gnome_pkgs, capture_output=True)
+                if suite_mode == "pulsar_next":
+                    log_msg("Removing classic GNOME applications via apt...")
+                    GLib.idle_add(self.update_progress, 0.20, "Configuring Next suite...")
+                    subprocess.run(prefix + ["apt-get", "remove", "-y", "--purge"] + gnome_pkgs, capture_output=True)
+                    to_install = next_pkgs + extra_pkgs
+                elif suite_mode == "standard_gnome":
+                    log_msg("Configuring GNOME suite via apt...")
+                    GLib.idle_add(self.update_progress, 0.20, "Removing Next applications...")
+                    subprocess.run(prefix + ["apt-get", "remove", "-y", "--purge"] + next_pkgs, capture_output=True)
+                    to_install = gnome_pkgs + extra_pkgs
+                else:
+                    to_install = next_pkgs + gnome_pkgs + extra_pkgs
 
-                GLib.idle_add(self.update_progress, 0.60, "Installing Next applications via apt...")
+                GLib.idle_add(self.update_progress, 0.60, "Installing packages via apt...")
                 subprocess.run(prefix + ["apt-get", "update"], capture_output=True)
-                subprocess.run(prefix + ["apt-get", "install", "-y"] + next_pkgs, capture_output=True)
+                subprocess.run(prefix + ["apt-get", "install", "-y", "--reinstall"] + to_install, capture_output=True)
 
             # Ensure portal environment variables
             log_msg("Configuring GTK_USE_PORTAL=1...")
@@ -2080,13 +2176,13 @@ class RecoveryWindow(Adw.ApplicationWindow):
                 subprocess.run(["sync"])
                 subprocess.run(["umount", "-R", "/mnt"], capture_output=True)
 
-            log_msg("✅ Pulsar Next applications installed successfully!")
-            GLib.idle_add(self.update_progress, 1.0, "Upgrade completed successfully!")
+            log_msg("✅ Desktop configuration completed successfully!")
+            GLib.idle_add(self.update_progress, 1.0, "Configuration completed successfully!")
             GLib.idle_add(self.on_installation_completed)
 
         except Exception as err:
-            log_msg(f"ERROR: Upgrade failed: {err}")
-            GLib.idle_add(self.on_installation_failed, f"Upgrade failed: {err}")
+            log_msg(f"ERROR: Configuration failed: {err}")
+            GLib.idle_add(self.on_installation_failed, f"Configuration failed: {err}")
 
     def _show_install_packages_dialog(self):
         """Show a confirmation dialog before installing extra packages."""

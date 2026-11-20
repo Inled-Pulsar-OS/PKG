@@ -1,7 +1,7 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=finder
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Finder file manager and native file chooser portal for Pulsar OS"
 arch=('x86_64')
 url="https://github.com/skjsbsnq/Forma"
@@ -11,13 +11,14 @@ optdepends=('vulkan-icd-loader: Vulkan renderer (OpenGL otherwise)'
             'poppler: PDF thumbnail and preview rendering'
             'pulsaros-flydrop: share files over AirDrop-compatible FlyDrop'
             'pulsaros-cloud: cloud drive manager via rclone')
-provides=('nautilus' 'mayo-finder')
-conflicts=('nautilus' 'mayo-finder')
-replaces=('nautilus' 'mayo-finder')
+provides=('mayo-finder')
+conflicts=('mayo-finder')
+replaces=('mayo-finder')
 options=('!strip')
 
 prepare() {
     _src="$(cd "$startdir"/../../../finder && pwd)"
+    rm -rf "$srcdir/staging"
     mkdir -p "$srcdir/staging"
     bash "$_src/prepare-assets.sh" "$srcdir/staging"
 }

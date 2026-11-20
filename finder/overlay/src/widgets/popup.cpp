@@ -48,12 +48,39 @@ Rect PopupView::placePopup(Size window, Size measured) {
     const float margin = 8;
     float w = std::max(measured.width, m_minWidth);
     float h = std::min(measured.height, window.height - margin * 2);
-    float x = m_centered ? m_anchor.center().x - w * 0.5f : m_anchor.x;
-    float below = m_anchor.bottom() + m_gap;
-    float above = m_anchor.y - m_gap - h;
-    float y = m_edge == PopupEdge::Below ? below : above;
-    if (m_edge == PopupEdge::Below && y + h > window.height - margin && above >= margin) y = above;
-    if (m_edge == PopupEdge::Above && y < margin && below + h <= window.height - margin) y = below;
+    float x = 0;
+    float y = 0;
+
+    if (m_edge == PopupEdge::Right || m_edge == PopupEdge::Left) {
+        float rightX = m_anchor.right() + m_gap;
+        float leftX = m_anchor.x - w - m_gap;
+        if (m_edge == PopupEdge::Right) {
+            x = rightX;
+            if (x + w > window.width - margin && leftX >= margin) {
+                x = leftX;
+            }
+        } else {
+            x = leftX;
+            if (x < margin && rightX + w <= window.width - margin) {
+                x = rightX;
+            }
+        }
+        y = m_anchor.y - 4;
+        if (y + h > window.height - margin) {
+            y = window.height - margin - h;
+        }
+        if (y < margin) {
+            y = margin;
+        }
+    } else {
+        x = m_centered ? m_anchor.center().x - w * 0.5f : m_anchor.x;
+        float below = m_anchor.bottom() + m_gap;
+        float above = m_anchor.y - m_gap - h;
+        y = m_edge == PopupEdge::Below ? below : above;
+        if (m_edge == PopupEdge::Below && y + h > window.height - margin && above >= margin) y = above;
+        if (m_edge == PopupEdge::Above && y < margin && below + h <= window.height - margin) y = below;
+    }
+
     x = std::clamp(x, margin, std::max(margin, window.width - w - margin));
     y = std::clamp(y, margin, std::max(margin, window.height - h - margin));
     return {x, y, w, h};
@@ -64,8 +91,16 @@ void PopupView::draw(Painter& p) {
     const float a = std::clamp(sample(m_appear), 0.0f, 1.0f);
     // The panel grows out of its anchor while it fades in, instead of appearing in place.
     if (m_appear.isAnimating(now())) requestAnimationFrame();
-    const float fromAnchor = m_edge == PopupEdge::Below ? -6.0f : 6.0f;
-    const Rect r = frame().translated({0, (1.0f - a) * fromAnchor});
+    Point offset{0, 0};
+    if (m_edge == PopupEdge::Right) {
+        offset = {(1.0f - a) * -6.0f, 0};
+    } else if (m_edge == PopupEdge::Left) {
+        offset = {(1.0f - a) * 6.0f, 0};
+    } else {
+        const float fromAnchor = m_edge == PopupEdge::Below ? -6.0f : 6.0f;
+        offset = {0, (1.0f - a) * fromAnchor};
+    }
+    const Rect r = frame().translated(offset);
     const float radius = cornerRadiusValue();
     p.pushOpacity(a);
     // Two shadows: a wide soft one for depth and a tight one to define the edge.
