@@ -118,6 +118,11 @@ pub static TABLE: &[Binding] = &[
     b("4", A, Act::Mode(4)),
 ];
 
+/// Category id behind `Act::Mode(n)` (1-based): Applications, Files, Actions, Clipboard.
+pub fn mode_id(n: usize) -> Option<&'static str> {
+    ["applications", "files", "actions", "clipboard"].get(n.checked_sub(1)?).copied()
+}
+
 pub fn lookup(key: &str, mods: Mods) -> Option<Act> {
     TABLE.iter().find(|x| x.key == key && x.mods == mods).map(|x| x.act)
 }

@@ -18,6 +18,8 @@ fn matches_category_filters_correctly() {
     assert!(matches_category("song.mp3", "audio"));
     assert!(matches_category("clip.mp4", "video"));
     assert!(matches_category("anything.xyz", "all"));
+    assert!(matches_category("anything.xyz", "files"));
+    assert!(matches_category("noext", "files"));
 }
 
 #[test]

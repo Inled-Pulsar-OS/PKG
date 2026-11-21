@@ -30,6 +30,19 @@ fn labels() {
 }
 
 #[test]
+fn alt_digits_map_to_applications_files_actions_clipboard() {
+    let ids: Vec<_> = (1..=4)
+        .map(|d| match lookup(&d.to_string(), A) {
+            Some(Act::Mode(n)) => mode_id(n),
+            other => panic!("Alt+{d} -> {other:?}"),
+        })
+        .collect();
+    assert_eq!(ids, [Some("applications"), Some("files"), Some("actions"), Some("clipboard")]);
+    assert_eq!(mode_id(0), None);
+    assert_eq!(mode_id(5), None);
+}
+
+#[test]
 fn quick_pick_covers_nine() {
     for i in 0..9 {
         assert!(TABLE.iter().any(|x| x.act == Act::Quick(i)));

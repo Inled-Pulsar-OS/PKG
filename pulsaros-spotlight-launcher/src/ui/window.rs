@@ -26,6 +26,7 @@ use extras::{Extras, View};
 const CATEGORIES: &[(&str, &str, &str)] = &[
     ("all", "All", "spotlight"),
     ("applications", "Apps", "applications"),
+    ("files", "Files", "files"),
     ("documents", "Docs", "files"),
     ("images", "Images", "files"),
     ("audio", "Music", "files"),
@@ -1034,7 +1035,7 @@ impl SpotlightWindow {
         }
 
         // If in media/document category and query empty and not browsing, start browsing the category dir
-        if ["documents", "images", "audio", "video"].contains(&category.as_str()) && query.trim().is_empty() && self.current_dir.borrow().is_none() {
+        if ["files", "documents", "images", "audio", "video"].contains(&category.as_str()) && query.trim().is_empty() && self.current_dir.borrow().is_none() {
             let target_dir = match category.as_str() {
                 "documents" => dirs::document_dir(),
                 "images" => dirs::picture_dir(),
@@ -1167,7 +1168,7 @@ impl SpotlightWindow {
         self.render(keep);
 
         // Async Nautilus file search (appended to Results, or its own section)
-        let needs_files = (!is_empty || ["documents", "images", "audio", "video"].contains(&category.as_str()))
+        let needs_files = (!is_empty || ["files", "documents", "images", "audio", "video"].contains(&category.as_str()))
             && !["applications", "actions", "clipboard", "web", "calc", "windows", "snippets"].contains(&category.as_str());
         let target = match category.as_str() {
             "documents" => "Documents",
@@ -1247,6 +1248,7 @@ impl SpotlightWindow {
         let ph = match id {
             "all" => "Spotlight Search...",
             "applications" => "Search Applications...",
+            "files" => "Search Files...",
             "documents" => "Search Documents...",
             "images" => "Search Images...",
             "audio" => "Search Music...",
@@ -2154,7 +2156,11 @@ impl SpotlightWindow {
             }
             Act::CatNext => self.cycle_category(1),
             Act::CatPrev => self.cycle_category(-1),
-            Act::Mode(n) => self.goto_mode(n),
+            Act::Mode(n) => {
+                if let Some(id) = shortcuts::mode_id(n) {
+                    self.set_category_by_id(id);
+                }
+            }
         }
         stop
     }
