@@ -369,6 +369,8 @@ if ! $IS_DEBIAN_HOST && [ -n "$DEBIAN_CHROOT" ] && [ -d "$DEBIAN_CHROOT/usr/bin"
     $SUDO_CMD chroot "$DEBIAN_CHROOT" /bin/bash -c "
         set -e
         export DEBIAN_FRONTEND=noninteractive
+        dpkg --configure -a 2>/dev/null || true
+        apt-get install -f -y 2>/dev/null || true
         apt-get update || true
         apt-get install -y --no-install-recommends \
             build-essential cmake meson ninja-build git gettext blueprint-compiler \
