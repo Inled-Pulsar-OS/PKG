@@ -65,6 +65,12 @@ Element privacyPanel(Context& ctx) {
     if (usb && gx::hasName(gx::systemBus(), "org.usbguard1"))
         lock.push_back(ui::toggleRow("USB Protection", usb, "Blocks new USB devices while the screen is locked"));
 
+    auto configBiometrics = Button("Configure…");
+    configBiometrics.onClick([] {
+        gx::run({"pulsaros-biometrics-settings"});
+    });
+    lock.push_back(FormRow("Touch ID & Face ID", HStack({Spacer(), configBiometrics}).spacing(8).align(Alignment::Center), "Configure fingerprint, facial recognition and presence auto-lock"));
+
     return ui::page({
         ui::section("Screen Lock", lock),
         ui::section("Location", {ui::toggleRow("Location Services", gx::Key("org.gnome.system.location", "enabled"),
@@ -528,44 +534,19 @@ public:
         m_changePassword.onClick([this] {
             openTerminal("echo '=== Pulsar OS Password Change ===' && passwd && echo '' && echo 'Password updated successfully! Press Enter to close...' && read -r || read -r");
         });
-        m_enrollTouchId.onClick([this] {
-            openTerminal("echo '=== Touch ID / Fingerprint Setup ===' && echo 'Touch the fingerprint sensor repeatedly...' && fprintd-enroll && echo '' && echo 'Fingerprint registered successfully! Press Enter to close...' && read -r || read -r", [this] {
-                refresh();
-            });
-        });
-        m_deleteTouchId.onClick([this] {
-            ui::confirm(ui::Anchor(m_deleteTouchId), "Delete All Fingerprints?", "All registered fingerprints will be removed from your account.", "Delete", [this] {
-                gx::run({"fprintd-delete", m_currentLogin}, [this](const gx::ProcessResult&) {
-                    refresh();
-                });
-            });
-        });
-        m_enrollFaceId.onClick([this] {
-            openTerminal("echo '=== Face ID / Facial Recognition Setup ===' && echo 'Look straight into your webcam...' && pkexec howdy add && echo '' && echo 'Face model enrolled! Press Enter to close...' && read -r || read -r", [this] {
-                refresh();
-            });
-        });
-        m_testFaceId.onClick([this] {
-            gx::run({"howdy", "test"});
-        });
-        m_clearFaceId.onClick([this] {
-            ui::confirm(ui::Anchor(m_clearFaceId), "Clear All Face Models?", "All registered face models will be removed.", "Clear", [this] {
-                gx::run({"pkexec", "howdy", "clear", "-y"}, [this](const gx::ProcessResult&) {
-                    refresh();
-                });
-            });
+        m_configureBiometrics.onClick([this] {
+            gx::run({"pulsaros-biometrics-settings"});
         });
 
         std::vector<Element> biometricsRows;
-        biometricsRows.push_back(FormRow("Touch ID (Fingerprint)", HStack({m_touchIdStatus, Spacer(), m_enrollTouchId, m_deleteTouchId}).spacing(8).align(Alignment::Center), "Use your fingerprint to log in and authorize administrator actions"));
-        biometricsRows.push_back(FormRow("Face ID (Facial Recognition)", HStack({m_faceIdStatus, Spacer(), m_enrollFaceId, m_testFaceId, m_clearFaceId}).spacing(8).align(Alignment::Center), "Authenticate using your camera and Howdy facial recognition"));
+        biometricsRows.push_back(FormRow("Touch ID & Face ID", HStack({Spacer(), m_configureBiometrics}).spacing(8).align(Alignment::Center), "Configure fingerprint, facial recognition and presence auto-lock"));
 
         return {m_header,
                 ui::section("Account & Password",
                             {FormRow("Name", HStack({m_nameField, m_saveName}).spacing(6).align(Alignment::Center)), m_typeRow,
                              FormRow("Automatic Login", m_autoLogin, "Log in without a password at startup"),
                              FormRow("Password", HStack({Label("••••••••").secondary(), Spacer(), m_changePassword}).spacing(8).align(Alignment::Center), "Change account login password")}),
-                ui::section("Touch ID & Face ID", biometricsRows),
+                ui::section("Biometrics & Presence", biometricsRows),
                 m_others.element()};
     }
 
@@ -592,39 +573,6 @@ public:
         m_autoLogin.isOn(gx::lookupBool(p.get(), "AutomaticLogin"));
 
         m_currentLogin = login;
-        // Check Touch ID
-        bool hasFprintDevice = false;
-        bool hasEnrolledFinger = false;
-        auto fpRes = gx::runSync({"fprintd-list", login});
-        if (fpRes.ok() && (fpRes.out.find("found 1 devices") != std::string::npos || fpRes.out.find("Device at") != std::string::npos)) {
-            hasFprintDevice = true;
-            if (fpRes.out.find("finger") != std::string::npos) {
-                hasEnrolledFinger = true;
-                m_touchIdStatus.setText("Enrolled & Active");
-            } else {
-                m_touchIdStatus.setText("Ready to Enroll");
-            }
-        } else {
-            m_touchIdStatus.setText("No Sensor Detected");
-        }
-        m_enrollTouchId.disabled(!hasFprintDevice);
-        m_deleteTouchId.disabled(!hasEnrolledFinger);
-
-        // Check Face ID
-        bool hasHowdy = (access("/usr/bin/howdy", X_OK) == 0 || access("/usr/local/bin/howdy", X_OK) == 0);
-        if (hasHowdy) {
-            auto howdyRes = gx::runSync({"howdy", "list"});
-            bool hasFace = (howdyRes.out.find("No face model") == std::string::npos && howdyRes.out.find("ID") != std::string::npos);
-            m_faceIdStatus.setText(hasFace ? "Configured" : "Ready to Add Face");
-            m_enrollFaceId.disabled(false);
-            m_testFaceId.disabled(!hasFace);
-            m_clearFaceId.disabled(!hasFace);
-        } else {
-            m_faceIdStatus.setText("Optional (Howdy not installed)");
-            m_enrollFaceId.disabled(true);
-            m_testFaceId.disabled(true);
-            m_clearFaceId.disabled(true);
-        }
 
         std::vector<Element> rows;
         if (auto list = gx::callSync(gx::systemBus(), kAccounts, "/org/freedesktop/Accounts", kAccounts, "ListCachedUsers", nullptr, "(ao)")) {
@@ -699,13 +647,7 @@ private:
     FormRow m_typeRow = ui::infoRow("Account Type", m_type);
     Toggle m_autoLogin{"", false};
     Button m_changePassword = Button("Change Password…").controlSize(ControlSize::Small);
-    Label m_touchIdStatus = Label("").secondary();
-    Button m_enrollTouchId = Button("Enroll…").controlSize(ControlSize::Small);
-    Button m_deleteTouchId = Button("Delete All").controlSize(ControlSize::Small);
-    Label m_faceIdStatus = Label("").secondary();
-    Button m_enrollFaceId = Button("Add Face…").controlSize(ControlSize::Small);
-    Button m_testFaceId = Button("Test…").controlSize(ControlSize::Small);
-    Button m_clearFaceId = Button("Clear").controlSize(ControlSize::Small);
+    Button m_configureBiometrics = Button("Configure…").controlSize(ControlSize::Small);
     ui::DynamicSection m_others{"Other Users", "No other users."};
 };
 
