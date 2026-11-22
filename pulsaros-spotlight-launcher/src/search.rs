@@ -419,8 +419,30 @@ pub fn search_nautilus(query: &str, category: &str, limit: usize) -> Vec<SearchR
         }
     }
 
-    results.sort_unstable_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    order_file_results(&mut results, q_trimmed);
     results
+}
+
+/// Stable sort by title relevance: exact name, prefix, whole word, substring, rest.
+/// Equal relevance keeps input order (Nautilus rank, or fallback walk order).
+fn order_file_results(results: &mut [SearchResult], query: &str) {
+    let q = query.to_lowercase();
+    let tier = |title: &str| -> u8 {
+        let t = title.to_lowercase();
+        let stem = t.rsplit_once('.').map_or(t.as_str(), |(s, _)| s);
+        if t == q || stem == q {
+            0
+        } else if t.starts_with(&q) {
+            1
+        } else if t.split(|c: char| !c.is_alphanumeric()).any(|w| w == q) {
+            2
+        } else if t.contains(&q) {
+            3
+        } else {
+            4
+        }
+    };
+    results.sort_by_cached_key(|r| tier(&r.title));
 }
 
 fn fallback_file_search(query: &str, limit: usize) -> Vec<String> {

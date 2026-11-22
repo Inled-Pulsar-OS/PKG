@@ -1,5 +1,34 @@
 use super::*;
 
+fn file_result(title: &str) -> SearchResult {
+    SearchResult {
+        url: format!("file:///tmp/{title}"),
+        title: title.to_string(),
+        mime: String::new(),
+        snippet: String::new(),
+        app: None,
+    }
+}
+
+#[test]
+fn order_file_results_puts_closest_title_first() {
+    let mut results = vec![
+        file_result("annual-report-draft-old.pdf"),
+        file_result("report-2024.pdf"),
+        file_result("report.pdf"),
+    ];
+    order_file_results(&mut results, "report");
+    let titles: Vec<&str> = results.iter().map(|r| r.title.as_str()).collect();
+    assert_eq!(titles, ["report.pdf", "report-2024.pdf", "annual-report-draft-old.pdf"]);
+}
+
+#[test]
+fn order_file_results_keeps_input_order_for_equal_relevance() {
+    let mut results = vec![file_result("zeta-report.txt"), file_result("alpha-report.txt")];
+    order_file_results(&mut results, "report");
+    assert_eq!(results[0].title, "zeta-report.txt");
+}
+
 #[test]
 fn browser_history_plain_returns_empty_when_no_database() {
     let tmp = std::env::temp_dir().join("pulsar_spotlight_test_no_hist");
