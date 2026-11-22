@@ -20,6 +20,17 @@ fn uninstall_message_is_cleaned() {
 }
 
 #[test]
+fn bar_event_maps_down_up_and_modes() {
+    let none = Mods { ctrl: false, shift: false, alt: false };
+    assert_eq!(bar_event(gdk::Key::Down, none, None), Some(LayoutEvent::Down));
+    assert_eq!(bar_event(gdk::Key::Up, none, None), Some(LayoutEvent::Up));
+    assert_eq!(bar_event(gdk::Key::Left, none, None), None);
+    assert_eq!(bar_event(gdk::Key::Down, Mods { ctrl: true, ..none }, None), None);
+    assert_eq!(bar_event(gdk::Key::_2, Mods { alt: true, ..none }, Some(Act::Mode(2))), Some(LayoutEvent::Mode(BarMode::Files)));
+    assert_eq!(bar_event(gdk::Key::_4, Mods { alt: true, ..none }, Some(Act::Mode(4))), Some(LayoutEvent::Mode(BarMode::Clipboard)));
+}
+
+#[test]
 fn zoom_css_scales() {
     assert!(zoom_css(1.5).contains("min-height: 84px"));
 }

@@ -3,7 +3,7 @@ use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
 use crate::core::commands::{self, Command};
 use crate::core::frecency::Frecency;
-use crate::core::layout::LayoutState;
+use crate::core::layout::{self, Action as LayoutAction, BarMode, Context as LayoutCtx, Event as LayoutEvent, LayoutState};
 use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch};
 use crate::core::settings::Settings;
 use crate::core::shortcuts::{self, Act, Mods};
@@ -1001,7 +1001,7 @@ impl SpotlightWindow {
 
     fn on_search_changed(self: &Rc<Self>) {
         self.history_mode.set(false);
-        if self.layout.get() == LayoutState::Idle && !self.search_entry.text().is_empty() {
+        if self.layout.get() != LayoutState::Panel && !self.search_entry.text().is_empty() {
             self.apply_layout(LayoutState::Panel);
         }
         if let Some(id) = self.debounce_id.borrow_mut().take() {
@@ -2050,6 +2050,12 @@ impl SpotlightWindow {
             return glib::Propagation::Stop;
         }
 
+        if self.layout.get() != LayoutState::Panel {
+            if let Some(p) = self.bar_key(keyval, mods, act) {
+                return p;
+            }
+        }
+
         if let Some(p) = self.emoji_key(&name, mods) {
             return p;
         }
@@ -2138,6 +2144,36 @@ impl SpotlightWindow {
         glib::Propagation::Proceed
     }
 
+    /// Keys in a bar state (Idle, IdleModes): expand to the Panel as the layout module says.
+    /// Left and Right do nothing there. `None` leaves the key to the normal handling.
+    fn bar_key(self: &Rc<Self>, keyval: gdk::Key, mods: Mods, act: Option<Act>) -> Option<glib::Propagation> {
+        if matches!(keyval, gdk::Key::Left | gdk::Key::Right) && !mods.ctrl && !mods.alt {
+            return Some(glib::Propagation::Stop);
+        }
+        let event = bar_event(keyval, mods, act)?;
+        match layout::transition(self.layout.get(), &LayoutCtx::default(), event).action {
+            LayoutAction::ShowHome => {
+                self.apply_layout(LayoutState::Panel);
+                self.do_search(false);
+            }
+            LayoutAction::ShowHistory => {
+                self.apply_layout(LayoutState::Panel);
+                if self.settings.borrow().history().is_empty() {
+                    self.do_search(false);
+                } else {
+                    self.show_history();
+                }
+            }
+            LayoutAction::SwitchMode(_) => {
+                let Some(Act::Mode(n)) = act else { return None };
+                self.apply_layout(LayoutState::Panel);
+                self.set_category_by_id(shortcuts::mode_id(n)?);
+            }
+            _ => return None,
+        }
+        Some(glib::Propagation::Stop)
+    }
+
     fn handle_act(self: &Rc<Self>, act: Act) -> glib::Propagation {
         let stop = glib::Propagation::Stop;
         match act {
@@ -2219,6 +2255,22 @@ impl SpotlightWindow {
                 self.perform(rd, action, None);
             }
         }
+    }
+}
+
+/// Layout event for a key pressed in a bar state: Down, Up, or Alt+1..4.
+fn bar_event(keyval: gdk::Key, mods: Mods, act: Option<Act>) -> Option<LayoutEvent> {
+    if let Some(Act::Mode(n)) = act {
+        let mode = [BarMode::Applications, BarMode::Files, BarMode::Actions, BarMode::Clipboard].get(n.checked_sub(1)?)?;
+        return Some(LayoutEvent::Mode(*mode));
+    }
+    if mods.ctrl || mods.alt || mods.shift {
+        return None;
+    }
+    match keyval {
+        gdk::Key::Down => Some(LayoutEvent::Down),
+        gdk::Key::Up => Some(LayoutEvent::Up),
+        _ => None,
     }
 }
 
