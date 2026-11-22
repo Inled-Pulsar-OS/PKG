@@ -64,6 +64,7 @@ fn save_writes_file_with_owner_only_permissions() {
 
     let mgr = manager_with_max(50);
     mgr.record_clip("secret-token");
+    mgr.flush();
 
     let dir = mgr.inner.lock().unwrap().data_dir.clone().unwrap();
     let file = ClipboardManager::clipboard_file_in(&dir);
@@ -84,6 +85,7 @@ fn save_creates_private_dir_and_tightens_existing_loose_file() {
 
     let mgr = ClipboardManager::new_for_test(SpotlightConfig::default(), dir.clone());
     mgr.record_clip("x");
+    mgr.flush();
 
     assert_eq!(fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
     assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
@@ -106,6 +108,36 @@ fn password_manager_hint_is_not_recorded() {
     assert!(mgr.get_items().is_empty());
     mgr.record_clip_with_formats("ordinary", &["text/plain"]);
     assert_eq!(mgr.get_items().len(), 1);
+}
+
+#[test]
+fn burst_of_copies_writes_once() {
+    use std::sync::atomic::Ordering;
+    let dir = temp_dir("burst");
+    let mgr = ClipboardManager::new_for_test(SpotlightConfig::default(), dir.clone());
+    for i in 0..10 {
+        mgr.record_clip(&format!("clip {i}"));
+    }
+    std::thread::sleep(SAVE_DELAY + Duration::from_millis(700));
+    assert_eq!(mgr.writes.load(Ordering::SeqCst), 1);
+    let saved = fs::read_to_string(ClipboardManager::clipboard_file_in(&dir)).unwrap();
+    assert!(!saved.contains('\n'), "history is compact JSON");
+    let items: Vec<ClipboardItem> = serde_json::from_str(&saved).unwrap();
+    assert_eq!(items.len(), 10);
+}
+
+#[test]
+fn flush_persists_pending_history_and_skips_clean() {
+    use std::sync::atomic::Ordering;
+    let dir = temp_dir("flush");
+    let mgr = ClipboardManager::new_for_test(SpotlightConfig::default(), dir.clone());
+    mgr.record_clip("keep me");
+    mgr.flush();
+    let reloaded = ClipboardManager::new_for_test(SpotlightConfig::default(), dir);
+    assert_eq!(reloaded.get_items()[0].text, "keep me");
+    assert_eq!(mgr.writes.load(Ordering::SeqCst), 1);
+    mgr.flush(); // clean: no second write
+    assert_eq!(mgr.writes.load(Ordering::SeqCst), 1);
 }
 
 #[test]

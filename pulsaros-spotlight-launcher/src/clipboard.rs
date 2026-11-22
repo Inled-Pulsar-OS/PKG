@@ -7,8 +7,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
+/// Quiet period after a copy before history is written; copies inside it share one write.
+const SAVE_DELAY: Duration = Duration::from_millis(1500);
 /// Largest clipboard entry kept in history; longer text is cut on a char boundary.
 pub const MAX_ITEM_BYTES: usize = 64 * 1024;
 const SECRET_HINT_MIME: &str = "x-kde-passwordManagerHint";
@@ -22,6 +24,10 @@ pub struct ClipboardItem {
 #[derive(Clone)]
 pub struct ClipboardManager {
     inner: Arc<Mutex<ClipboardManagerInner>>,
+    /// Serializes disk writes so the worker thread and a shutdown flush never share the temp file.
+    write_lock: Arc<Mutex<()>>,
+    #[cfg(test)]
+    writes: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 struct ClipboardManagerInner {
@@ -30,6 +36,10 @@ struct ClipboardManagerInner {
     /// Resolved data directory for this session; `None` means the platform
     /// data-directory lookup failed, so history stays in-memory only.
     data_dir: Option<PathBuf>,
+    /// History changed since the last write.
+    dirty: bool,
+    /// A delayed save thread is already waiting.
+    save_pending: bool,
 }
 
 impl ClipboardManager {
@@ -72,20 +82,63 @@ impl ClipboardManager {
             }
         }
 
-        let inner = Arc::new(Mutex::new(ClipboardManagerInner { items, config, data_dir: dir }));
-        Self { inner }
+        let inner = Arc::new(Mutex::new(ClipboardManagerInner {
+            items,
+            config,
+            data_dir: dir,
+            dirty: false,
+            save_pending: false,
+        }));
+        Self {
+            inner,
+            write_lock: Arc::new(Mutex::new(())),
+            #[cfg(test)]
+            writes: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        }
     }
 
+    /// Writes the history now, whether or not it is dirty.
     pub fn save(&self) {
-        let inner = self.inner.lock().unwrap();
-        let Some(dir) = inner.data_dir.clone() else { return };
+        let _guard = self.write_lock.lock().unwrap();
+        let (dir, content) = {
+            let mut inner = self.inner.lock().unwrap();
+            let Some(dir) = inner.data_dir.clone() else { return };
+            let Ok(content) = serde_json::to_string(&inner.items) else { return };
+            inner.dirty = false;
+            (dir, content)
+        };
         if Self::ensure_private_dir(&dir).is_err() {
             return;
         }
-        let file = Self::clipboard_file_in(&dir);
-        if let Ok(content) = serde_json::to_string_pretty(&inner.items) {
-            let _ = Self::write_private(&file, content.as_bytes());
+        #[cfg(test)]
+        self.writes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _ = Self::write_private(&Self::clipboard_file_in(&dir), content.as_bytes());
+    }
+
+    /// Writes the history only if it changed since the last write. Call on shutdown.
+    pub fn flush(&self) {
+        if self.inner.lock().unwrap().dirty {
+            self.save();
         }
+    }
+
+    /// Marks history dirty and, unless a worker is already waiting, starts one that
+    /// writes it after `delay`.
+    fn schedule_save(&self, delay: Duration) {
+        {
+            let mut inner = self.inner.lock().unwrap();
+            inner.dirty = true;
+            if inner.save_pending {
+                return;
+            }
+            inner.save_pending = true;
+        }
+        let mgr = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(delay);
+            mgr.inner.lock().unwrap().save_pending = false;
+            mgr.flush();
+        });
     }
 
     /// Creates `dir` (and parents) and locks it to 0700, so other local accounts
@@ -164,9 +217,8 @@ impl ClipboardManager {
             inner.items.truncate(max_items);
         }
 
-        // Save immediately
         drop(inner);
-        self.save();
+        self.schedule_save(SAVE_DELAY);
     }
 
     pub fn get_items(&self) -> Vec<ClipboardItem> {

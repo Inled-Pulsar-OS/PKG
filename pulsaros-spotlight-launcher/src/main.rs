@@ -108,6 +108,10 @@ fn main() -> gtk4::glib::ExitCode {
             let clipboard_mgr = ClipboardManager::new(config.clone());
             let backend = SearchBackend::new(Some(clipboard_mgr.clone()));
 
+            // A pending debounced history write must not be lost on a normal quit.
+            let flush_mgr = clipboard_mgr.clone();
+            app.connect_shutdown(move |_| flush_mgr.flush());
+
             // Clipboard change listener
             let cb_c = clipboard_mgr.clone();
             if let Some(display) = gdk::Display::default() {
