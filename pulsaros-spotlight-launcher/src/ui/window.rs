@@ -287,6 +287,7 @@ fn zoom_css(z: f64) -> String {
          window.spotlight-window .result-icon {{ -gtk-icon-size: {}px; }}
          window.spotlight-window .search-header {{ min-height: {}px; }}
          window.spotlight-window.idle .search-header {{ min-height: {}px; }}
+         window.spotlight-window.idle entry.search-input, window.spotlight-window.idle entry.search-input > text {{ font-size: {}px; }}
          window.spotlight-window button.mode-button {{ min-width: {}px; min-height: {}px; -gtk-icon-size: {}px; }}
          window.spotlight-window .mode-buttons {{ margin-left: {}px; }}",
         p(13.0),
@@ -300,6 +301,7 @@ fn zoom_css(z: f64) -> String {
         p(40.0),
         p(76.0),
         p(PILL_H as f64),
+        p(24.0),
         p(MODE_BTN),
         p(MODE_BTN),
         p(26.0),
@@ -813,6 +815,7 @@ impl SpotlightWindow {
         for w in &self.panel_parts {
             w.set_visible(!idle);
         }
+        self.mode_icon.set_pixel_size(if idle { 24 } else { 28 });
         if idle {
             self.window.add_css_class("idle");
         } else {

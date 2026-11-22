@@ -1,0 +1,54 @@
+/* PulsarOS Spotlight - idle bar: flat tint glass (no gradient, no inset highlight, no blur needed).
+   Loaded last so it wins over the Panel rules in light.css, dark.css and liquid-glass.css. */
+
+window.spotlight-window.idle .spotlight-main {
+    border-radius: 999px !important;
+    background-image: none !important;
+}
+window.spotlight-window.idle .search-header {
+    margin: 0 22px;
+    padding: 0;
+    border-bottom: none;
+}
+window.spotlight-window.idle .search-input,
+window.spotlight-window.idle .search-input > text {
+    font-weight: 300;
+}
+window.spotlight-window.idle button.mode-button {
+    border-radius: 999px;
+    background-image: none;
+}
+
+/* light */
+window.spotlight-window.idle.light .spotlight-main {
+    background-color: rgba(255, 255, 255, 0.55) !important;
+    border: 1px solid rgba(255, 255, 255, 0.70) !important;
+    box-shadow: 0 8px 24px rgba(20, 30, 70, 0.18) !important;
+}
+window.spotlight-window.idle.light button.mode-button {
+    background-color: rgba(255, 255, 255, 0.55);
+    border-color: rgba(255, 255, 255, 0.70);
+    box-shadow: 0 8px 24px rgba(20, 30, 70, 0.18);
+    color: #1f2a44;
+}
+window.spotlight-window.idle.light .search-icon,
+window.spotlight-window.idle.light .search-input placeholder {
+    color: rgba(31, 42, 68, 0.60);
+}
+
+/* dark */
+window.spotlight-window.idle.dark .spotlight-main {
+    background-color: rgba(34, 36, 50, 0.55) !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28) !important;
+}
+window.spotlight-window.idle.dark button.mode-button {
+    background-color: rgba(34, 36, 50, 0.55);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    color: #f2f4fb;
+}
+window.spotlight-window.idle.dark .search-icon,
+window.spotlight-window.idle.dark .search-input placeholder {
+    color: rgba(242, 244, 251, 0.65);
+}
