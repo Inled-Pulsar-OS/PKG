@@ -41,6 +41,7 @@ pub mod emoji;
 pub mod dmenu;
 pub mod frecency;
 pub mod layout;
+pub mod nav;
 pub mod quicklinks;
 pub mod ranker;
 pub mod root_search;
