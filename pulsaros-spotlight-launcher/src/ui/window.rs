@@ -23,22 +23,16 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
+mod chrome;
+mod dialog;
 mod extras;
+mod panel;
+mod toast;
+use chrome::*;
+use dialog::Dialog;
 use extras::{Extras, View};
-
-const DEBOUNCE_MS: u64 = 80;
-const BASE_W: i32 = 712;
-const BASE_H: i32 = 580;
-/// Idle pill size (before zoom).
-const PILL_W: i32 = 740;
-const PILL_H: i32 = 60;
-/// Mode button diameter and the gap between bar items (before zoom).
-const MODE_BTN: f64 = 60.0;
-const MODE_GAP: f64 = 12.0;
-/// Bar buttons: (shortcut number, tooltip). Order matches `shortcuts::mode_id`.
-const BAR_BUTTONS: [(usize, &str); 4] = [(1, "Applications"), (2, "Files"), (3, "Actions"), (4, "Clipboard")];
-const ZOOM_MIN: f64 = 0.8;
-const ZOOM_MAX: f64 = 1.6;
+pub(crate) use panel::primary_title;
+use panel::Panel;
 
 type SectionList = Vec<(String, Vec<RowData>)>;
 
@@ -50,24 +44,6 @@ struct UiAction {
     keys: Vec<String>,
     danger: bool,
     argv: Option<Vec<String>>,
-}
-
-struct Panel {
-    root: gtk4::Box,
-    list: gtk4::ListBox,
-    entry: gtk4::Entry,
-    all: RefCell<Vec<UiAction>>,
-    shown: RefCell<Vec<UiAction>>,
-    target: RefCell<Option<RowData>>,
-}
-
-struct Dialog {
-    root: gtk4::Box,
-    title: gtk4::Label,
-    body: gtk4::Label,
-    entry: gtk4::Entry,
-    ok: gtk4::Button,
-    on_ok: RefCell<Option<Box<dyn Fn(String)>>>,
 }
 
 pub struct SpotlightWindow {
@@ -134,85 +110,6 @@ pub struct SpotlightWindow {
     progress_label: gtk4::Label,
 }
 
-fn pulsar_liquid_glass_enabled() -> bool {
-    let Some(src) = gtk4::gio::SettingsSchemaSource::default() else { return true };
-    if src.lookup("org.gnome.shell", true).is_none() {
-        return true;
-    }
-    let settings = gtk4::gio::Settings::new("org.gnome.shell");
-    let exts = settings.strv("enabled-extensions");
-    exts.iter().any(|uuid| {
-        let u = uuid.as_str();
-        u == "liquid-glass@thinkingcoding1231.gmail.com"
-            || u == "blur-my-shell@aunetx"
-            || u.contains("blur")
-            || u.contains("glass")
-    }) || true
-}
-
-/// Load `data/icons/<name>` from the install dirs, falling back to the source tree.
-fn icon_file(name: &str) -> Option<PathBuf> {
-    [get_local_icon_dir(), get_icon_dir(), PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/data/icons"))]
-        .into_iter()
-        .map(|d| d.join(name))
-        .find(|f| f.exists())
-}
-
-fn set_mode_icon(img: &gtk4::Image, glyph: &str) {
-    match icon_file(&format!("mode-{glyph}-symbolic.svg")) {
-        Some(f) => img.set_from_gicon(&gtk4::gio::FileIcon::new(&gtk4::gio::File::for_path(f))),
-        None => img.set_icon_name(Some(if glyph == "more" { "view-more-symbolic" } else { "system-search-symbolic" })),
-    }
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-fn keycap(text: &str) -> gtk4::Label {
-    let l = gtk4::Label::new(Some(text));
-    l.add_css_class("keycap");
-    l
-}
-
-fn keycap_row(keys: &[String]) -> gtk4::Box {
-    let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
-    for k in keys {
-        b.append(&keycap(k));
-    }
-    b
-}
-
-/// Title of the primary action for the panel and the selected-row hint.
-pub(crate) fn primary_title(r: &RowData) -> String {
-    for (prefix, title) in [("dmenu:", "Select"), ("snippet:", "Paste Snippet"), ("window:", "Switch to Window"), ("script:", "Run Script")] {
-        if r.row.id.starts_with(prefix) {
-            return title.into();
-        }
-    }
-    match r.row.kind {
-        RowKind::App => "Open Application".into(),
-        RowKind::Command => "Run".into(),
-        RowKind::Clipboard => "Paste".into(),
-        RowKind::Calc => "Copy Answer".into(),
-        RowKind::File => match &r.payload {
-            Some(p) if p.mime == "inode/directory" || p.mime == "folder" => "Open Folder".into(),
-            Some(p) if p.url.starts_with("http") => "Open in Browser".into(),
-            _ => "Open".into(),
-        },
-        RowKind::Fallback => {
-            if r.row.id.starts_with("history:") {
-                "Search Again".into()
-            } else {
-                r.row.actions.first().map(|a| a.title.clone()).unwrap_or_else(|| "Open".into())
-            }
-        }
-    }
-}
-
 fn calc_row(c: &CalcResult, id: String) -> RowData {
     RowData {
         row: Row::simple(RowKind::Calc, &id, &c.answer, &c.question, "accessories-calculator-symbolic"),
@@ -239,41 +136,6 @@ fn clean_uninstall_message(message: &str, app_name: &str) -> String {
         clean = err_part.trim().to_string();
     }
     clean
-}
-
-fn zoom_css(z: f64) -> String {
-    let p = |v: f64| (v * z).round();
-    format!(
-        "window.spotlight-window .spotlight-main {{ font-size: {}px; }}
-         window.spotlight-window entry.search-input, window.spotlight-window entry.search-input > text {{ font-size: {}px; }}
-         window.spotlight-window .result-row {{ min-height: {}px; }}
-         window.spotlight-window .result-title {{ font-size: {}px; }}
-         window.spotlight-window .result-subtitle, window.spotlight-window .result-kind {{ font-size: {}px; }}
-         window.spotlight-window .section-header {{ font-size: {}px; }}
-         window.spotlight-window .icon-tile {{ min-width: {}px; min-height: {}px; }}
-         window.spotlight-window .result-icon {{ -gtk-icon-size: {}px; }}
-         window.spotlight-window .search-header {{ min-height: {}px; }}
-         window.spotlight-window.idle .search-header {{ min-height: {}px; }}
-         window.spotlight-window.idle entry.search-input, window.spotlight-window.idle entry.search-input > text {{ font-size: {}px; }}
-         window.spotlight-window button.mode-button {{ min-width: {}px; min-height: {}px; -gtk-icon-size: {}px; }}
-         window.spotlight-window .mode-buttons {{ margin-left: {}px; }}",
-        p(13.0),
-        p(30.0),
-        p(56.0),
-        p(17.0),
-        p(13.0),
-        p(12.0),
-        p(44.0),
-        p(44.0),
-        p(40.0),
-        p(76.0),
-        p(PILL_H as f64),
-        p(24.0),
-        p(MODE_BTN),
-        p(MODE_BTN),
-        p(26.0),
-        p(MODE_GAP)
-    )
 }
 
 impl SpotlightWindow {
@@ -838,57 +700,6 @@ impl SpotlightWindow {
         anim.set_easing(adw::Easing::EaseOutCubic);
         anim.play();
         *self.size_anim.borrow_mut() = Some(anim);
-    }
-
-    // ---- loading bar / toast -------------------------------------------------
-
-    fn loading_begin(self: &Rc<Self>) {
-        let n = self.loading_count.get() + 1;
-        self.loading_count.set(n);
-        if n == 1 {
-            self.loading_bar.set_opacity(1.0);
-            let bar = self.loading_bar.clone();
-            let id = glib::timeout_add_local(Duration::from_millis(50), move || {
-                bar.pulse();
-                glib::ControlFlow::Continue
-            });
-            *self.loading_timer.borrow_mut() = Some(id);
-        }
-    }
-
-    fn loading_end(&self) {
-        let n = self.loading_count.get().saturating_sub(1);
-        self.loading_count.set(n);
-        if n == 0 {
-            if let Some(id) = self.loading_timer.borrow_mut().take() {
-                id.remove();
-            }
-            self.loading_bar.set_opacity(0.0);
-            self.loading_bar.set_fraction(0.0);
-        }
-    }
-
-    fn toast(self: &Rc<Self>, msg: &str, undo: Option<Rc<dyn Fn()>>) {
-        self.footer_status.set_label(msg);
-        self.toast_pill.set_visible(true);
-        self.toast_undo.set_visible(undo.is_some());
-        *self.toast_cb.borrow_mut() = undo;
-        if let Some(id) = self.toast_timer.borrow_mut().take() {
-            id.remove();
-        }
-        let s = self.clone();
-        let id = glib::timeout_add_local(Duration::from_millis(4000), move || {
-            *s.toast_timer.borrow_mut() = None;
-            s.reset_toast();
-            glib::ControlFlow::Break
-        });
-        *self.toast_timer.borrow_mut() = Some(id);
-    }
-
-    fn reset_toast(&self) {
-        self.toast_pill.set_visible(false);
-        self.toast_undo.set_visible(false);
-        *self.toast_cb.borrow_mut() = None;
     }
 
     // ---- state persistence ---------------------------------------------------
@@ -1756,252 +1567,6 @@ impl SpotlightWindow {
         });
     }
 
-    // ---- action panel ----------------------------------------------------------------
-
-    fn panel_open(&self) -> bool {
-        self.panel.root.is_visible()
-    }
-
-    fn open_more_menu(self: &Rc<Self>) {
-        let menu_box = gtk4::Box::new(gtk4::Orientation::Vertical, 3);
-        menu_box.add_css_class("popover-menu-box");
-
-        // 1. Actions for currently selected item (if any)
-        if let Some(rd) = self.result_view.selected_row() {
-            let actions = self.actions_for(&rd);
-            if !actions.is_empty() {
-                for act in actions.into_iter().take(4) {
-                    let btn = gtk4::Button::new();
-                    btn.add_css_class("popover-item");
-                    let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-                    let label = gtk4::Label::builder().label(&act.title).xalign(0.0).hexpand(true).build();
-                    row_box.append(&label);
-                    if !act.keys.is_empty() {
-                        let k = gtk4::Label::builder().label(&act.keys.join("+")).build();
-                        k.add_css_class("keycap");
-                        row_box.append(&k);
-                    }
-                    btn.set_child(Some(&row_box));
-                    let s = self.clone();
-                    let a_id = act.id.clone();
-                    let a_argv = act.argv.clone();
-                    let rd_c = rd.clone();
-                    btn.connect_clicked(move |_| {
-                        s.more_popover.popdown();
-                        s.perform(rd_c.clone(), &a_id, a_argv.clone());
-                    });
-                    menu_box.append(&btn);
-                }
-                let sep = gtk4::Separator::new(gtk4::Orientation::Horizontal);
-                menu_box.append(&sep);
-            }
-        }
-
-        // 2. Global tools & options
-        let tools: &[(&str, &str, &str)] = &[
-            ("ui:quicklink_create", "Create Quicklink", "list-add-symbolic"),
-            ("ui:quicklink_manage", "Manage Quicklinks", "emblem-system-symbolic"),
-            ("ui:snippet_create", "Create Snippet", "insert-text-symbolic"),
-            ("ui:snippets", "Snippets", "edit-paste-symbolic"),
-            ("ui:windows", "Open Windows", "preferences-system-windows-symbolic"),
-            ("ui:emoji", "Emoji & Symbols", "face-smile-symbolic"),
-            ("cmd:settings", "System Settings", "preferences-system-symbolic"),
-        ];
-
-        for &(id, label_text, icon_name) in tools {
-            let btn = gtk4::Button::new();
-            btn.add_css_class("popover-item");
-            let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-            let img = gtk4::Image::from_icon_name(icon_name);
-            img.set_pixel_size(16);
-            let label = gtk4::Label::builder().label(label_text).xalign(0.0).hexpand(true).build();
-            row_box.append(&img);
-            row_box.append(&label);
-            btn.set_child(Some(&row_box));
-
-            let s = self.clone();
-            btn.connect_clicked(move |_| {
-                s.more_popover.popdown();
-                match id {
-                    "ui:quicklink_create" => s.quicklink_form(),
-                    "ui:quicklink_manage" => s.quicklink_manage(),
-                    "ui:snippet_create" => s.snippet_form(),
-                    "ui:snippets" => s.push_view(View::Snippets, "Search snippets\u{2026}"),
-                    "ui:windows" => s.push_view(View::Windows, "Filter open windows\u{2026}"),
-                    "ui:emoji" => s.open_emoji_panel(),
-                    "cmd:settings" => {
-                        let _ = std::process::Command::new("gnome-control-center").spawn();
-                    }
-                    _ => {}
-                }
-            });
-            menu_box.append(&btn);
-        }
-
-        self.more_popover.set_child(Some(&menu_box));
-        self.more_popover.popup();
-    }
-
-    fn open_panel(self: &Rc<Self>) {
-        if self.x.view.get() == View::Emoji {
-            self.open_emoji_panel();
-            return;
-        }
-        let Some(rd) = self.result_view.selected_row() else { return };
-        if self.in_recent() {
-            return;
-        }
-        *self.panel.all.borrow_mut() = self.actions_for(&rd);
-        *self.panel.target.borrow_mut() = Some(rd);
-        self.panel.entry.set_text("");
-        self.fill_panel("");
-        self.panel.root.set_visible(true);
-        self.panel.entry.grab_focus();
-    }
-
-    fn close_panel(&self) {
-        if self.panel.root.is_visible() {
-            self.panel.root.set_visible(false);
-            self.search_entry.grab_focus();
-        }
-    }
-
-    fn fill_panel(&self, filter: &str) {
-        let f = filter.trim().to_lowercase();
-        while let Some(c) = self.panel.list.first_child() {
-            self.panel.list.remove(&c);
-        }
-        let shown: Vec<UiAction> =
-            self.panel.all.borrow().iter().filter(|a| f.is_empty() || a.title.to_lowercase().contains(&f)).cloned().collect();
-        for a in &shown {
-            let row = gtk4::ListBoxRow::new();
-            let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
-            b.add_css_class("action-item");
-            if a.danger {
-                b.add_css_class("danger");
-            }
-            let t = gtk4::Label::builder().label(&a.title).xalign(0.0).hexpand(true).build();
-            t.add_css_class("action-title");
-            b.append(&t);
-            if !a.keys.is_empty() {
-                b.append(&keycap_row(&a.keys));
-            }
-            row.set_child(Some(&b));
-            self.panel.list.append(&row);
-        }
-        *self.panel.shown.borrow_mut() = shown;
-        if let Some(first) = self.panel.list.row_at_index(0) {
-            self.panel.list.select_row(Some(&first));
-        }
-    }
-
-    fn panel_step(&self, delta: i32) {
-        let n = self.panel.shown.borrow().len() as i32;
-        if n == 0 {
-            return;
-        }
-        let cur = self.panel.list.selected_row().map(|r| r.index()).unwrap_or(0);
-        let next = (cur + delta).rem_euclid(n);
-        if let Some(r) = self.panel.list.row_at_index(next) {
-            self.panel.list.select_row(Some(&r));
-        }
-    }
-
-    fn panel_activate(self: &Rc<Self>) {
-        let idx = self.panel.list.selected_row().map(|r| r.index()).unwrap_or(-1);
-        let act = self.panel.shown.borrow().get(idx.max(0) as usize).cloned();
-        let target = self.panel.target.borrow().clone();
-        if let (Some(a), Some(rd)) = (act, target) {
-            self.close_panel();
-            self.perform(rd, &a.id, a.argv);
-        }
-    }
-
-    fn setup_panel_events(self: &Rc<Self>) {
-        let s = self.clone();
-        self.panel.entry.connect_changed(move |e| s.fill_panel(&e.text()));
-        let s = self.clone();
-        self.panel.list.connect_row_activated(move |_, _| s.panel_activate());
-    }
-
-    // ---- dialog --------------------------------------------------------------------
-
-    fn show_dialog(
-        self: &Rc<Self>,
-        title: &str,
-        body: &str,
-        entry: Option<String>,
-        ok_label: &str,
-        destructive: bool,
-        on_ok: Box<dyn Fn(String)>,
-    ) {
-        self.close_panel();
-        self.dialog_reset_form();
-        self.dialog.title.set_label(title);
-        self.dialog.body.set_label(body);
-        self.dialog.ok.set_label(ok_label);
-        if destructive {
-            self.dialog.ok.add_css_class("destructive");
-        } else {
-            self.dialog.ok.remove_css_class("destructive");
-        }
-        match entry {
-            Some(text) => {
-                self.dialog.entry.set_text(&text);
-                self.dialog.entry.set_visible(true);
-            }
-            None => self.dialog.entry.set_visible(false),
-        }
-        *self.dialog.on_ok.borrow_mut() = Some(on_ok);
-        self.x.stack.set_visible(false);
-        self.dialog_backdrop.set_visible(true);
-        self.dialog.root.set_visible(true);
-        if gtk4::prelude::WidgetExt::is_visible(&self.dialog.entry) {
-            self.dialog.entry.grab_focus();
-            self.dialog.entry.set_position(-1);
-        } else {
-            self.dialog.ok.grab_focus();
-        }
-    }
-
-    fn dialog_open(&self) -> bool {
-        self.dialog.root.is_visible()
-    }
-
-    fn close_dialog(&self) {
-        if self.dialog.root.is_visible() {
-            self.dialog_backdrop.set_visible(false);
-            self.dialog.root.set_visible(false);
-            self.x.stack.set_visible(true);
-            self.dialog_reset_form();
-            *self.dialog.on_ok.borrow_mut() = None;
-            self.search_entry.grab_focus();
-        }
-    }
-
-    fn accept_dialog(self: &Rc<Self>) {
-        if self.accept_form() {
-            return;
-        }
-        let text = self.dialog.entry.text().to_string();
-        let cb = self.dialog.on_ok.borrow_mut().take();
-        self.close_dialog();
-        if let Some(cb) = cb {
-            cb(text);
-        }
-    }
-
-    // ---- zoom ------------------------------------------------------------------------
-
-    fn set_zoom(&self, z: f64) {
-        let z = ((z * 10.0).round() / 10.0).clamp(ZOOM_MIN, ZOOM_MAX);
-        self.zoom_provider.load_from_data(&zoom_css(z));
-        self.apply_size(z);
-        let mut c = self.config.borrow_mut();
-        c.zoom = z;
-        c.save();
-    }
-
     // ---- keyboard --------------------------------------------------------------------
 
     fn go_back(self: &Rc<Self>) {
@@ -2158,25 +1723,6 @@ impl SpotlightWindow {
 
     fn layout_ctx(&self) -> LayoutCtx {
         LayoutCtx { revealed: self.revealed.get(), pointer_origin: self.pointer_origin.get(), ..LayoutCtx::default() }
-    }
-
-    /// Context for Esc, Shift+Esc and the query-emptied event.
-    fn panel_ctx(&self) -> LayoutCtx {
-        let nav = self.nav.borrow().clone();
-        let empty = self.search_entry.text().is_empty();
-        let sub_state = self.dialog_open()
-            || self.panel_open()
-            || self.x.view.get() != View::Root
-            || !nav.is_root();
-        LayoutCtx {
-            mode_all: self.category.get() == Category::All,
-            query_empty: empty,
-            query_typed: nav.typed,
-            at_root: !sub_state && empty,
-            home_opened: nav.opened == Opened::Home,
-            history_opened: nav.opened == Opened::History,
-            ..self.layout_ctx()
-        }
     }
 
     fn on_pointer(&self, x: f64, y: f64) {
