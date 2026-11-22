@@ -6,6 +6,8 @@ use rusqlite::{Connection as SqliteConnection, OpenFlags};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::OnceLock;
 use std::thread;
 use zbus::blocking::Connection as ZbusConnection;
 
@@ -171,7 +173,7 @@ impl SearchBackend {
         F: Fn(Vec<SearchResult>) + 'static,
     {
         let query = query.to_string();
-        run_async(move || query_browser_history_plain(&query, limit), callback);
+        run_async(JobKind::History, move |ctx| query_browser_history(ctx, &query, limit), callback);
     }
 
     pub fn search_web(&self, query: &str) -> Vec<SearchResult> {
@@ -272,7 +274,7 @@ impl SearchBackend {
 
         let query = query.to_string();
         let category = category.to_string();
-        run_async(move || search_nautilus(&query, &category, limit), callback);
+        run_async(JobKind::Files, move |ctx| search_nautilus(ctx, &query, &category, limit), callback);
     }
 }
 
@@ -283,12 +285,73 @@ thread_local! {
     static NEXT_JOB: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-/// Runs `job` on a worker thread and calls `callback` with its result on the calling (main)
-/// thread. The worker wakes the main loop with `MainContext::invoke` when it finishes, so no
-/// polling timer exists while a search is pending. `callback` is always called exactly once.
-fn run_async<J, F>(job: J, callback: F)
+/// Which stream a job belongs to. Only the newest queued job of each kind is worth running.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum JobKind {
+    Files,
+    History,
+}
+
+/// State owned by the single worker thread, reused across jobs.
+#[derive(Default)]
+struct WorkerCtx {
+    session: Option<ZbusConnection>,
+    /// Read-only handles to each `places.sqlite`, opened on first use.
+    history_dbs: std::collections::HashMap<PathBuf, SqliteConnection>,
+}
+
+impl WorkerCtx {
+    /// The session bus connection: created once, kept until a call on it fails.
+    fn session(&mut self) -> Option<&ZbusConnection> {
+        if self.session.is_none() {
+            self.session = ZbusConnection::session().ok();
+        }
+        self.session.as_ref()
+    }
+}
+
+struct Job {
+    id: u64,
+    kind: JobKind,
+    run: Box<dyn FnOnce(&mut WorkerCtx) -> Vec<SearchResult> + Send>,
+}
+
+/// For queued jobs in arrival order, flags the ones to run: the last of each kind.
+fn newest_per_kind(kinds: &[JobKind]) -> Vec<bool> {
+    (0..kinds.len()).map(|i| !kinds[i + 1..].contains(&kinds[i])).collect()
+}
+
+fn worker_loop(rx: Receiver<Job>, main: gtk4::glib::MainContext) {
+    let mut state = WorkerCtx::default();
+    while let Ok(first) = rx.recv() {
+        let mut batch = vec![first];
+        while let Ok(job) = rx.try_recv() {
+            batch.push(job);
+        }
+        let kinds: Vec<JobKind> = batch.iter().map(|j| j.kind).collect();
+        for (job, keep) in batch.into_iter().zip(newest_per_kind(&kinds)) {
+            // A superseded job still answers (empty) so the caller's callback runs exactly once.
+            let results = if keep { (job.run)(&mut state) } else { Vec::new() };
+            let id = job.id;
+            main.invoke(move || {
+                if let Some(cb) = PENDING.with(|p| p.borrow_mut().remove(&id)) {
+                    cb(results);
+                }
+            });
+        }
+    }
+}
+
+static WORKER: OnceLock<Sender<Job>> = OnceLock::new();
+
+/// Queues `job` on the single search worker and calls `callback` with its result on the calling
+/// (main) thread. The worker wakes the main loop with `MainContext::invoke` when it finishes, so
+/// no polling timer exists while a search is pending. A queued job superseded by a newer one of
+/// the same kind is skipped and answered with an empty result. `callback` is always called
+/// exactly once.
+fn run_async<J, F>(kind: JobKind, job: J, callback: F)
 where
-    J: FnOnce() -> Vec<SearchResult> + Send + 'static,
+    J: FnOnce(&mut WorkerCtx) -> Vec<SearchResult> + Send + 'static,
     F: FnOnce(Vec<SearchResult>) + 'static,
 {
     let id = NEXT_JOB.with(|n| {
@@ -297,15 +360,13 @@ where
         id
     });
     PENDING.with(|p| p.borrow_mut().insert(id, Box::new(callback)));
-    let ctx = gtk4::glib::MainContext::default();
-    thread::spawn(move || {
-        let results = job();
-        ctx.invoke(move || {
-            if let Some(cb) = PENDING.with(|p| p.borrow_mut().remove(&id)) {
-                cb(results);
-            }
-        });
+    let tx = WORKER.get_or_init(|| {
+        let (tx, rx) = channel();
+        let main = gtk4::glib::MainContext::default();
+        thread::spawn(move || worker_loop(rx, main));
+        tx
     });
+    let _ = tx.send(Job { id, kind, run: Box::new(job) });
 }
 
 pub fn matches_category(filename: &str, category: &str) -> bool {
@@ -341,7 +402,7 @@ pub fn matches_category(filename: &str, category: &str) -> bool {
     }
 }
 
-pub fn search_nautilus(query: &str, category: &str, limit: usize) -> Vec<SearchResult> {
+fn search_nautilus(ctx: &mut WorkerCtx, query: &str, category: &str, limit: usize) -> Vec<SearchResult> {
     let mut results = Vec::new();
     let q_trimmed = query.trim();
     if q_trimmed.is_empty() {
@@ -355,14 +416,23 @@ pub fn search_nautilus(query: &str, category: &str, limit: usize) -> Vec<SearchR
 
     // Call Nautilus SearchProvider over D-Bus
     let nautilus_uris = (|| -> Option<Vec<String>> {
-        let conn = ZbusConnection::session().ok()?;
+        let conn = ctx.session()?;
         let reply = conn.call_method(
             Some("org.gnome.Nautilus"),
             "/org/gnome/Nautilus/SearchProvider",
             Some("org.gnome.Shell.SearchProvider2"),
             "GetInitialResultSet",
             &(terms,),
-        ).ok()?;
+        );
+        let reply = match reply {
+            Ok(r) => r,
+            Err(zbus::Error::MethodError(..)) => return None,
+            Err(_) => {
+                // Transport failure: drop the connection so the next job reconnects.
+                ctx.session = None;
+                return None;
+            }
+        };
         let (uris,): (Vec<String>,) = reply.body().deserialize().ok()?;
         Some(uris)
     })();
@@ -493,7 +563,12 @@ fn walk_shallow(dir: &std::path::Path, query: &str, results: &mut Vec<String>, l
     }
 }
 
+#[cfg(test)]
 fn query_browser_history_plain(query: &str, limit: usize) -> Vec<SearchResult> {
+    query_browser_history(&mut WorkerCtx::default(), query, limit)
+}
+
+fn query_browser_history(ctx: &mut WorkerCtx, query: &str, limit: usize) -> Vec<SearchResult> {
     let mut results = Vec::new();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
@@ -516,13 +591,18 @@ fn query_browser_history_plain(query: &str, limit: usize) -> Vec<SearchResult> {
             continue;
         }
 
-        if let Ok(conn) = SqliteConnection::open_with_flags(
-            &db_path,
-            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
-        ) {
-            // The browser holds an exclusive lock while running; never
-            // let the UI block waiting for it
-            let _ = conn.busy_timeout(std::time::Duration::from_millis(100));
+        if !ctx.history_dbs.contains_key(&db_path) {
+            if let Ok(conn) = SqliteConnection::open_with_flags(
+                &db_path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+            ) {
+                // The browser holds an exclusive lock while running; never
+                // let the worker block waiting for it
+                let _ = conn.busy_timeout(std::time::Duration::from_millis(100));
+                ctx.history_dbs.insert(db_path.clone(), conn);
+            }
+        }
+        if let Some(conn) = ctx.history_dbs.get(&db_path) {
             let sql = if query.is_empty() {
                 format!("SELECT url, title FROM moz_places WHERE hidden = 0 AND title != '' ORDER BY frecency DESC LIMIT {}", limit)
             } else {
