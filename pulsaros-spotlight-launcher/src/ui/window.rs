@@ -5,7 +5,7 @@ use crate::config::SpotlightConfig;
 use crate::core::commands::{self, Command};
 use crate::core::frecency::Frecency;
 use crate::core::layout::{self, Action as LayoutAction, BarMode, Context as LayoutCtx, Event as LayoutEvent, LayoutState};
-use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch};
+use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch, SearchIndex};
 use crate::core::settings::Settings;
 use crate::core::shortcuts::{self, Act, Mods};
 use crate::core::store::Store;
@@ -106,6 +106,8 @@ pub struct SpotlightWindow {
     settings: RefCell<Settings>,
     frecency: RefCell<Frecency>,
     commands: RefCell<Vec<Command>>,
+    /// Apps and their ranker index, rebuilt after the next app reload (`None` = stale).
+    search_data: RefCell<Option<Rc<(Vec<AppEntry>, SearchIndex)>>>,
     x: Extras,
     states: RefCell<HashMap<String, bool>>,
     last_probe: Cell<Option<std::time::Instant>>,
@@ -626,6 +628,7 @@ impl SpotlightWindow {
             settings: RefCell::new(settings),
             frecency: RefCell::new(frecency),
             commands: RefCell::new(Vec::new()),
+            search_data: RefCell::new(None),
             x,
             states: RefCell::new(HashMap::new()),
             last_probe: Cell::new(None),
@@ -1051,6 +1054,7 @@ impl SpotlightWindow {
         self.backend.set_on_apps_updated(move || {
             let s = s.clone();
             glib::idle_add_local(move || {
+                *s.search_data.borrow_mut() = None;
                 if s.window.is_visible() {
                     s.do_search(true);
                 }
@@ -1124,13 +1128,21 @@ impl SpotlightWindow {
     }
 
     fn core_sections(&self, query: &str, extra: &[Row]) -> SectionList {
-        let apps: Vec<AppEntry> = self.backend.apps_snapshot().iter().map(app_entry).collect();
+        let commands = self.commands.borrow();
+        let data = self
+            .search_data
+            .borrow_mut()
+            .get_or_insert_with(|| {
+                let apps: Vec<AppEntry> = self.backend.apps_snapshot().iter().map(app_entry).collect();
+                let index = SearchIndex::new(&apps, &commands);
+                Rc::new((apps, index))
+            })
+            .clone();
         let settings = self.settings.borrow();
         let frecency = self.frecency.borrow();
         let states = self.states.borrow();
-        let commands = self.commands.borrow();
         let ctx = Ctx {
-            apps: &apps,
+            apps: &data.0,
             commands: &commands,
             states: &states,
             settings: &settings,
@@ -1138,7 +1150,7 @@ impl SpotlightWindow {
             now: now_secs(),
             extra,
         };
-        RootSearch::sections(query, &ctx)
+        RootSearch::sections_indexed(query, &ctx, &data.1)
             .into_iter()
             .map(|s| (s.title, s.rows.into_iter().map(|row| RowData { row, payload: None, calc: None }).collect()))
             .collect()

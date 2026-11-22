@@ -222,3 +222,24 @@ fn deterministic_order() {
     let w = World::new();
     assert_eq!(w.run("s"), w.run("s"));
 }
+
+#[test]
+fn prebuilt_index_matches_and_beats_per_query_build_with_1000_apps() {
+    let mut w = World::new();
+    w.apps = (0..1000).map(|i| app(&format!("app:a{i}"), &format!("Sample Tool Number {i}"), &["utility", "helper"])).collect();
+    let ctx = Ctx { apps: &w.apps, commands: &w.cmds, states: &w.states, settings: &w.settings, frecency: &w.fre, now: 1000, extra: &[] };
+    let index = SearchIndex::new(&w.apps, &w.cmds);
+    assert_eq!(RootSearch::sections("stn", &ctx), RootSearch::sections_indexed("stn", &ctx, &index));
+
+    let time = |f: &dyn Fn() -> Vec<Section>| {
+        let t = std::time::Instant::now();
+        for _ in 0..50 {
+            std::hint::black_box(f());
+        }
+        t.elapsed() / 50
+    };
+    let rebuilt = time(&|| RootSearch::sections("stn", &ctx));
+    let indexed = time(&|| RootSearch::sections_indexed("stn", &ctx, &index));
+    eprintln!("per query, 1000 apps: build+query {rebuilt:?}, prebuilt index {indexed:?}");
+    assert!(indexed < rebuilt);
+}

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use super::commands::Command;
 use super::frecency::Frecency;
-use super::ranker::{self, Item};
+use super::ranker::{self, Indexed};
 use super::settings::Settings;
 
 pub const SUGGESTION_MIN: f64 = 50.0;
@@ -95,6 +95,22 @@ pub struct Ctx<'a> {
     pub extra: &'a [Row],
 }
 
+/// Ranker input for every app and command, built once when either list changes.
+pub struct SearchIndex {
+    items: Vec<Indexed>,
+}
+
+impl SearchIndex {
+    pub fn new(apps: &[AppEntry], commands: &[Command]) -> Self {
+        let items = apps
+            .iter()
+            .map(|a| Indexed::new(&a.id, &a.name, &a.keywords))
+            .chain(commands.iter().map(|c| Indexed::new(&c.id, &c.title, &c.keywords)))
+            .collect();
+        SearchIndex { items }
+    }
+}
+
 pub struct RootSearch;
 
 fn actions(settings: &Settings, id: &str, primary: ActionDesc) -> Vec<ActionDesc> {
@@ -154,13 +170,19 @@ impl RootSearch {
         ctx.commands.iter().find(|c| c.id == id).map(|c| cmd_row(c, ctx))
     }
 
+    /// Builds a throwaway index; callers that search per keystroke use `sections_indexed`.
     pub fn sections(query: &str, ctx: &Ctx) -> Vec<Section> {
+        Self::sections_indexed(query, ctx, &SearchIndex::new(ctx.apps, ctx.commands))
+    }
+
+    /// `index` must be built from the same `ctx.apps` and `ctx.commands`.
+    pub fn sections_indexed(query: &str, ctx: &Ctx, index: &SearchIndex) -> Vec<Section> {
         let q = query.trim();
         let mut out = Vec::new();
         if q.is_empty() {
             Self::root(ctx, &mut out);
         } else {
-            Self::query(q, ctx, &mut out);
+            Self::query(q, ctx, index, &mut out);
         }
         out.retain(|s| !s.rows.is_empty());
         out
@@ -193,34 +215,20 @@ impl RootSearch {
         out.push(Section { title: "Applications".into(), rows: apps.iter().map(|a| app_row(a, ctx.settings)).collect() });
     }
 
-    fn query(q: &str, ctx: &Ctx, out: &mut Vec<Section>) {
-        let items: Vec<Item> = ctx
-            .apps
+    fn query(q: &str, ctx: &Ctx, index: &SearchIndex, out: &mut Vec<Section>) {
+        let rq = ranker::Query::new(q);
+        let mut scored: Vec<(&Indexed, i64)> = index
+            .items
             .iter()
-            .map(|a| (a.id.as_str(), a.name.as_str(), &a.keywords))
-            .chain(ctx.commands.iter().map(|c| (c.id.as_str(), c.title.as_str(), &c.keywords)))
-            .filter(|(id, _, _)| !ctx.settings.is_disabled(id))
-            .map(|(id, title, kw)| Item {
-                id: id.into(),
-                title: title.into(),
-                keywords: kw.clone(),
-                alias: ctx.settings.alias(id).map(String::from),
-            })
-            .collect();
-
-        let mut scored: Vec<(&Item, i64)> = ranker::rank(q, &items)
-            .into_iter()
-            .map(|(i, s)| {
+            .filter(|i| !ctx.settings.is_disabled(&i.id))
+            .filter_map(|i| {
+                let s = ranker::score_indexed(rq.as_ref()?, i, ctx.settings.alias(&i.id))?;
                 let learned = (ctx.frecency.learned(q, &i.id) as i64).min(LEARNED_MAX) * LEARNED_STEP;
                 let fre = (ctx.frecency.score(&i.id, ctx.now).min(300.0) * 3.0) as i64;
-                (i, s + learned + fre)
+                Some((i, s + learned + fre))
             })
             .collect();
-        scored.sort_by(|a, b| {
-            b.1.cmp(&a.1)
-                .then_with(|| a.0.title.to_lowercase().cmp(&b.0.title.to_lowercase()))
-                .then_with(|| a.0.id.cmp(&b.0.id))
-        });
+        scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.title_lc.cmp(&b.0.title_lc)).then_with(|| a.0.id.cmp(&b.0.id)));
 
         let mut rows: Vec<Row> = ctx.extra.iter().filter(|r| r.kind == RowKind::Calc).cloned().collect();
         rows.extend(scored.iter().filter_map(|(i, _)| Self::row_by_id(&i.id, ctx)));
