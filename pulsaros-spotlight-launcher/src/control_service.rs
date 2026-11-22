@@ -15,6 +15,7 @@ const PATH: &str = "/es/inled/PulsarosSpotlight/Control";
 
 struct ControlIface {
     on_hide: Arc<dyn Fn() + Send + Sync>,
+    on_pointer: Arc<dyn Fn(f64, f64) + Send + Sync>,
 }
 
 #[interface(name = "es.inled.PulsarosSpotlight.Control")]
@@ -23,6 +24,13 @@ impl ControlIface {
     /// window's current bounds while it's visible.
     fn hide(&self) {
         (self.on_hide)();
+    }
+
+    /// Called by the Shell extension for pointer motion anywhere on the screen (global
+    /// coordinates) while the Spotlight window is visible. A regular window only sees the
+    /// pointer over itself, so the compositor reports the rest.
+    fn pointer_moved(&self, x: f64, y: f64) {
+        (self.on_pointer)(x, y);
     }
 }
 
@@ -33,10 +41,11 @@ impl ControlIface {
 ///
 /// Failures (no session bus, name already owned, etc.) are logged and degrade to "the
 /// click-outside path never fires" rather than crashing the launcher.
-pub fn spawn(on_hide: impl Fn() + Send + Sync + 'static) {
+pub fn spawn(on_hide: impl Fn() + Send + Sync + 'static, on_pointer: impl Fn(f64, f64) + Send + Sync + 'static) {
     let on_hide: Arc<dyn Fn() + Send + Sync> = Arc::new(on_hide);
+    let on_pointer: Arc<dyn Fn(f64, f64) + Send + Sync> = Arc::new(on_pointer);
     std::thread::spawn(move || {
-        let iface = ControlIface { on_hide };
+        let iface = ControlIface { on_hide, on_pointer };
         let conn = match zbus::blocking::Connection::session() {
             Ok(c) => c,
             Err(e) => {

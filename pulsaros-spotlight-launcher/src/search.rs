@@ -1,6 +1,7 @@
 use crate::apps::{DesktopApp, load_apps};
 use crate::calculator::Calculator;
 use crate::clipboard::ClipboardManager;
+use crate::core::debounce::{Debounce, RELOAD_DELAY_MS};
 use rusqlite::{Connection as SqliteConnection, OpenFlags};
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -57,6 +58,7 @@ impl SearchBackend {
 
         let dirs = crate::apps::get_desktop_dirs();
         let mut monitors_borrow = self.monitors.borrow_mut();
+        let debounce = Rc::new(RefCell::new(Debounce::default()));
 
         for dir in dirs {
             if dir.is_dir() {
@@ -64,12 +66,30 @@ impl SearchBackend {
                 if let Ok(monitor) = gfile.monitor_directory(gio::FileMonitorFlags::NONE, None::<&gio::Cancellable>) {
                     let apps_c = self.apps.clone();
                     let cb_c = self.on_apps_updated.clone();
+                    let debounce_c = debounce.clone();
                     monitor.connect_changed(move |_, _, _, event_type| {
                         if event_type == gio::FileMonitorEvent::Changed || event_type == gio::FileMonitorEvent::Created || event_type == gio::FileMonitorEvent::Deleted {
-                            *apps_c.borrow_mut() = load_apps();
-                            if let Some(cb) = &*cb_c.borrow() {
-                                cb();
+                            if !debounce_c.borrow_mut().trigger() {
+                                return;
                             }
+                            let apps_c = apps_c.clone();
+                            let cb_c = cb_c.clone();
+                            let debounce_c = debounce_c.clone();
+                            gtk4::glib::timeout_add_local_once(
+                                std::time::Duration::from_millis(RELOAD_DELAY_MS),
+                                move || {
+                                    debounce_c.borrow_mut().fire();
+                                    gtk4::glib::spawn_future_local(async move {
+                                        // load_apps() parses files: keep it off the GTK main thread.
+                                        if let Ok(apps) = gio::spawn_blocking(load_apps).await {
+                                            *apps_c.borrow_mut() = apps;
+                                            if let Some(cb) = &*cb_c.borrow() {
+                                                cb();
+                                            }
+                                        }
+                                    });
+                                },
+                            );
                         }
                     });
                     monitors_borrow.push(monitor);
@@ -406,7 +426,7 @@ pub fn search_nautilus(query: &str, category: &str, limit: usize) -> Vec<SearchR
 fn fallback_file_search(query: &str, limit: usize) -> Vec<String> {
     let q_lower = query.to_lowercase();
     let mut results = Vec::new();
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let search_roots = [
         dirs::document_dir().unwrap_or_else(|| home.join("Documents")),
         dirs::download_dir().unwrap_or_else(|| home.join("Downloads")),
@@ -453,7 +473,7 @@ fn walk_shallow(dir: &std::path::Path, query: &str, results: &mut Vec<String>, l
 
 fn query_browser_history_plain(query: &str, limit: usize) -> Vec<SearchResult> {
     let mut results = Vec::new();
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/jaime"));
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
     let mut paths = Vec::new();
     paths.push(home.join(".mozilla/seafari-profile/places.sqlite"));

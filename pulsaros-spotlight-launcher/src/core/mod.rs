@@ -36,6 +36,7 @@
 #![allow(dead_code)]
 
 pub mod commands;
+pub mod debounce;
 pub mod emoji;
 pub mod dmenu;
 pub mod frecency;

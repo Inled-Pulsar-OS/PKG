@@ -34,3 +34,9 @@ fn bar_event_maps_down_up_and_modes() {
 fn zoom_css_scales() {
     assert!(zoom_css(1.5).contains("min-height: 84px"));
 }
+
+#[test]
+fn hyprland_cursor_reply_parses() {
+    assert_eq!(parse_cursor_pos("1870, 521\n"), Some((1870.0, 521.0)));
+    assert_eq!(parse_cursor_pos("garbage"), None);
+}

@@ -2,8 +2,8 @@
    Loaded last so it wins over the Panel rules in light.css, dark.css and liquid-glass.css. */
 
 window.spotlight-window.idle .spotlight-main {
-    border-radius: 999px !important;
-    background-image: none !important;
+    border-radius: 22px;
+    background-image: none;
 }
 window.spotlight-window.idle .search-header {
     margin: 0 22px;
@@ -12,7 +12,7 @@ window.spotlight-window.idle .search-header {
 }
 window.spotlight-window.idle .search-input,
 window.spotlight-window.idle .search-input > text {
-    font-weight: 300;
+    font-weight: 400;
 }
 window.spotlight-window.idle button.mode-button {
     border-radius: 999px;
@@ -21,9 +21,9 @@ window.spotlight-window.idle button.mode-button {
 
 /* light */
 window.spotlight-window.idle.light .spotlight-main {
-    background-color: rgba(255, 255, 255, 0.55) !important;
-    border: 1px solid rgba(255, 255, 255, 0.70) !important;
-    box-shadow: 0 8px 24px rgba(20, 30, 70, 0.18) !important;
+    background-color: rgba(212, 238, 252, 0.72);
+    border: 1px solid rgba(60, 90, 130, 0.35);
+    box-shadow: 0 8px 24px rgba(20, 30, 70, 0.18);
 }
 window.spotlight-window.idle.light button.mode-button {
     background-color: rgba(255, 255, 255, 0.55);
@@ -38,9 +38,9 @@ window.spotlight-window.idle.light .search-input placeholder {
 
 /* dark */
 window.spotlight-window.idle.dark .spotlight-main {
-    background-color: rgba(34, 36, 50, 0.55) !important;
-    border: 1px solid rgba(255, 255, 255, 0.22) !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28) !important;
+    background-color: rgba(34, 36, 50, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 window.spotlight-window.idle.dark button.mode-button {
     background-color: rgba(34, 36, 50, 0.55);

@@ -141,6 +141,12 @@ fn main() -> gtk4::glib::ExitCode {
                         win.handle_outside_click();
                     }
                 });
+            }, |x, y| {
+                glib::MainContext::default().invoke(move || {
+                    if let Some(win) = HIDE_WIN.with(|h| h.borrow().clone()) {
+                        win.handle_global_pointer(x, y);
+                    }
+                });
             });
 
             *win_borrow = Some(spotlight_win);

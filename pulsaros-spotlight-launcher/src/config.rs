@@ -41,7 +41,7 @@ impl Default for SpotlightConfig {
 impl SpotlightConfig {
     fn config_dir() -> PathBuf {
         dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("/home/jaime/.config"))
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
             .join("pulsaros-spotlight")
     }
 

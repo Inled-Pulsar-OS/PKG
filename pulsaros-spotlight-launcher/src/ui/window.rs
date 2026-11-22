@@ -1,3 +1,4 @@
+use adw::prelude::AnimationExt as _;
 use crate::calculator::{CalcHistory, CalcResult, Calculator};
 use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
@@ -129,6 +130,12 @@ pub struct SpotlightWindow {
     layout: Cell<LayoutState>,
     /// The four round mode buttons; visible only in `IdleModes`.
     mode_buttons: gtk4::Box,
+    buttons_revealer: gtk4::Revealer,
+    size_anim: RefCell<Option<adw::TimedAnimation>>,
+    /// True once the Shell extension reports pointer motion; the window's own motion events
+    /// (local coordinates) are then ignored so the two coordinate spaces never mix.
+    global_pointer: Cell<bool>,
+    hypr_poll: RefCell<Option<glib::SourceId>>,
     /// The buttons were shown at some point since the window opened.
     revealed: Cell<bool>,
     /// The query text came from the user's typing (not from a mode or a view).
@@ -358,7 +365,10 @@ impl SpotlightWindow {
         main_box.set_hexpand(true);
         // Clip children to the rounded corners (the CSS `overflow` property is not accepted by GTK).
         main_box.set_overflow(gtk4::Overflow::Hidden);
-        window.set_child(Some(&main_box));
+        // The bar buttons sit beside the pill, not inside it, so the pill contracts when they show.
+        let outer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        outer.append(&main_box);
+        window.set_child(Some(&outer));
 
         // -- Search header: mode glyph, big light input, `...` disc --
         let search_container = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
@@ -394,7 +404,13 @@ impl SpotlightWindow {
 
         let mode_buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, MODE_GAP as i32);
         mode_buttons.add_css_class("mode-buttons");
-        mode_buttons.set_visible(false);
+        mode_buttons.set_margin_start(MODE_GAP as i32);
+        let buttons_revealer = gtk4::Revealer::builder()
+            .transition_type(gtk4::RevealerTransitionType::SlideLeft)
+            .transition_duration(200)
+            .reveal_child(false)
+            .child(&mode_buttons)
+            .build();
         for (n, tip) in BAR_BUTTONS {
             let img = gtk4::Image::new();
             img.set_pixel_size(26);
@@ -408,7 +424,7 @@ impl SpotlightWindow {
             b.set_tooltip_text(Some(tip));
             mode_buttons.append(&b);
         }
-        search_container.append(&mode_buttons);
+        outer.append(&buttons_revealer);
         main_box.append(&search_container);
 
         // -- Category bar (tabs) --
@@ -581,6 +597,7 @@ impl SpotlightWindow {
         main_box.append(&progress_revealer);
 
         let panel_parts: Vec<gtk4::Widget> = vec![
+            more_button.clone().upcast(),
             category_scroll.clone().upcast(),
             loading_bar.clone().upcast(),
             overlay.clone().upcast(),
@@ -643,6 +660,10 @@ impl SpotlightWindow {
             zoom_provider,
             layout: Cell::new(LayoutState::Idle),
             mode_buttons,
+            buttons_revealer,
+            size_anim: RefCell::new(None),
+            global_pointer: Cell::new(false),
+            hypr_poll: RefCell::new(None),
             revealed: Cell::new(false),
             query_typed: Cell::new(false),
             home_opened: Cell::new(false),
@@ -730,6 +751,40 @@ impl SpotlightWindow {
         }
     }
 
+    /// Pointer motion anywhere on the screen, reported by the Shell extension (global
+    /// coordinates). Reveals the mode buttons from any pointer travel, not only over the bar.
+    pub fn handle_global_pointer(&self, x: f64, y: f64) {
+        if self.window.is_visible() {
+            self.global_pointer.set(true);
+            self.on_pointer(x, y);
+        }
+    }
+
+    /// Hyprland has no extension that reports the pointer, so ask its IPC socket for the cursor
+    /// position every 30 ms while the window is visible and still in the Idle bar state. The
+    /// timer stops itself when the window hides. GNOME gets the position from the Shell
+    /// extension instead (`handle_global_pointer`), so this only runs under Hyprland.
+    fn start_hypr_pointer_poll(self: &Rc<Self>) {
+        let Some(path) = hypr_socket_path() else { return };
+        if self.hypr_poll.borrow().is_some() {
+            return;
+        }
+        let s = self.clone();
+        let id = glib::timeout_add_local(Duration::from_millis(30), move || {
+            if !s.window.is_visible() {
+                s.hypr_poll.borrow_mut().take();
+                return glib::ControlFlow::Break;
+            }
+            if s.layout.get() == LayoutState::Idle {
+                if let Some((x, y)) = hypr_cursor_pos(&path) {
+                    s.handle_global_pointer(x, y);
+                }
+            }
+            glib::ControlFlow::Continue
+        });
+        *self.hypr_poll.borrow_mut() = Some(id);
+    }
+
     pub fn present_with_focus(self: &Rc<Self>) {
         // Follow the Liquid Glass switch from Pulsar Settings.
         if pulsar_liquid_glass_enabled() {
@@ -742,6 +797,7 @@ impl SpotlightWindow {
         self.pointer_origin.set(None);
         self.reset_to_root();
         self.window.present();
+        self.start_hypr_pointer_poll();
         self.search_entry.grab_focus();
         self.refresh_states();
         self.refresh_currencies();
@@ -765,7 +821,7 @@ impl SpotlightWindow {
     fn apply_layout(&self, state: LayoutState) {
         self.layout.set(state);
         let idle = state != LayoutState::Panel;
-        self.mode_buttons.set_visible(state == LayoutState::IdleModes);
+        self.buttons_revealer.set_reveal_child(state == LayoutState::IdleModes);
         if state == LayoutState::IdleModes {
             self.revealed.set(true);
         }
@@ -788,7 +844,31 @@ impl SpotlightWindow {
 
     fn apply_size(&self, zoom: f64) {
         let (w, h) = if self.layout.get() != LayoutState::Panel { (PILL_W, PILL_H) } else { (BASE_W, BASE_H) };
-        self.window.set_size_request((w as f64 * zoom) as i32, (h as f64 * zoom) as i32);
+        let (w, h) = ((w as f64 * zoom) as i32, (h as f64 * zoom) as i32);
+        // The size request is only a minimum, so the default size must follow too: a
+        // non-resizable window keeps its default height otherwise.
+        let set = {
+            let win = self.window.clone();
+            move |height: i32| {
+                win.set_size_request(w, height);
+                win.set_default_size(w, height);
+            }
+        };
+        if let Some(a) = self.size_anim.borrow_mut().take() {
+            a.pause();
+        }
+        let from = self.window.height();
+        if from <= 0 || from == h || !self.window.is_visible() {
+            set(h);
+            return;
+        }
+        // Grow or shrink between the pill and the Panel in 200 ms (libadwaita honours
+        // `gtk-enable-animations`, so this snaps when animations are off).
+        let target = adw::CallbackAnimationTarget::new(move |v| set(v.round() as i32));
+        let anim = adw::TimedAnimation::new(&self.window, from as f64, h as f64, 200, target);
+        anim.set_easing(adw::Easing::EaseOutCubic);
+        anim.play();
+        *self.size_anim.borrow_mut() = Some(anim);
     }
 
     // ---- loading bar / toast -------------------------------------------------
@@ -950,7 +1030,11 @@ impl SpotlightWindow {
         let s = self.clone();
         let motion = gtk4::EventControllerMotion::new();
         motion.set_propagation_phase(gtk4::PropagationPhase::Capture);
-        motion.connect_motion(move |_, x, y| s.on_pointer(x, y));
+        motion.connect_motion(move |_, x, y| {
+            if !s.global_pointer.get() {
+                s.on_pointer(x, y);
+            }
+        });
         self.window.add_controller(motion);
 
         let mut child = self.mode_buttons.first_child();
@@ -2377,3 +2461,26 @@ fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<SearchResult> {
 #[cfg(test)]
 #[path = "../tests/window_tests.rs"]
 mod tests;
+
+/// Path of Hyprland's command socket, when running under Hyprland.
+fn hypr_socket_path() -> Option<std::path::PathBuf> {
+    let sig = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
+    let run = std::env::var_os("XDG_RUNTIME_DIR")?;
+    Some(std::path::PathBuf::from(run).join("hypr").join(sig).join(".socket.sock"))
+}
+
+/// Cursor position from Hyprland (`cursorpos` replies "x, y").
+fn hypr_cursor_pos(socket: &Path) -> Option<(f64, f64)> {
+    use std::io::{Read, Write};
+    let mut stream = std::os::unix::net::UnixStream::connect(socket).ok()?;
+    stream.set_read_timeout(Some(Duration::from_millis(50))).ok()?;
+    stream.write_all(b"cursorpos").ok()?;
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).ok()?;
+    parse_cursor_pos(&reply)
+}
+
+fn parse_cursor_pos(reply: &str) -> Option<(f64, f64)> {
+    let (x, y) = reply.trim().split_once(',')?;
+    Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+}

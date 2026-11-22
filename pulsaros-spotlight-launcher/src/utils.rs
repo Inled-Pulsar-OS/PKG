@@ -73,8 +73,9 @@ pub fn open_file(url: &str) -> bool {
             return app_info.launch(&[], None::<&gio::AppLaunchContext>).is_ok();
         }
         // Fallback search
-        for dir in &["/usr/share/applications", "/home/jaime/.local/share/applications"] {
-            let path = Path::new(dir).join(desktop_filename);
+        let user_apps = dirs::data_dir().map(|d| d.join("applications"));
+        for dir in std::iter::once(PathBuf::from("/usr/share/applications")).chain(user_apps) {
+            let path = dir.join(desktop_filename);
             if path.exists() {
                 if let Some(app_info) = gio::DesktopAppInfo::from_filename(path) {
                     return app_info.launch(&[], None::<&gio::AppLaunchContext>).is_ok();
