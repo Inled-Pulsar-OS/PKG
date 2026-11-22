@@ -36,6 +36,8 @@
 #![allow(dead_code)]
 
 pub mod apps_provider;
+pub mod calc_provider;
+pub mod clipboard_provider;
 pub mod commands;
 pub mod commands_provider;
 pub mod debounce;

@@ -4,6 +4,8 @@ use crate::category::Category;
 use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
 use crate::core::apps_provider::AppsProvider;
+use crate::core::calc_provider::{history_result, CalcHistoryProvider, CalculatorProvider};
+use crate::core::clipboard_provider::{self, ClipboardProvider};
 use crate::core::commands::{self, Command};
 use crate::core::commands_provider::CommandsProvider;
 use crate::core::frecency::Frecency;
@@ -62,7 +64,7 @@ pub struct SpotlightWindow {
     nav: RefCell<Nav>,
     debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
     search_seq: Rc<Cell<u64>>,
-    calc_history: RefCell<CalcHistory>,
+    calc_history: Rc<RefCell<CalcHistory>>,
     last_currency: Cell<Option<std::time::Instant>>,
 
     // core state
@@ -112,14 +114,6 @@ pub struct SpotlightWindow {
     progress_revealer: gtk4::Revealer,
     progress_spinner: gtk4::Spinner,
     progress_label: gtk4::Label,
-}
-
-fn calc_row(c: &CalcResult, id: String) -> RowData {
-    RowData {
-        row: Row::simple(RowKind::Calc, &id, &c.answer, &c.question, "accessories-calculator-symbolic"),
-        payload: None,
-        calc: Some(c.clone()),
-    }
 }
 
 fn app_entry(a: &crate::apps::DesktopApp) -> AppEntry {
@@ -449,7 +443,7 @@ impl SpotlightWindow {
             nav: RefCell::new(Nav::default()),
             debounce_id: Rc::new(RefCell::new(None)),
             search_seq: Rc::new(Cell::new(0)),
-            calc_history: RefCell::new(CalcHistory::open()),
+            calc_history: Rc::new(RefCell::new(CalcHistory::open())),
             last_currency: Cell::new(None),
             store,
             settings: RefCell::new(settings),
@@ -967,49 +961,25 @@ impl SpotlightWindow {
 
         let is_empty = query.trim().is_empty();
         if self.in_calc_history() {
-            let rows: Vec<RowData> = self
-                .calc_history
-                .borrow()
-                .search(&query)
-                .iter()
-                .map(|h| {
-                    calc_row(
-                        &CalcResult {
-                            question: h.question.clone(),
-                            answer: h.answer.clone(),
-                            caption_question: h.caption_question.clone(),
-                            caption_answer: h.caption_answer.clone(),
-                        },
-                        format!("calchist:{}", h.id),
-                    )
-                })
-                .collect();
-            *self.current.borrow_mut() = vec![("Calculator History".to_string(), rows)];
+            let rows = CalcHistoryProvider::new(self.calc_history.clone()).instant(&Query::new(&query));
+            *self.current.borrow_mut() = vec![("Calculator History".to_string(), self.attach_all(rows, &None))];
             self.render(keep);
             return;
         }
         let sections: SectionList = match category {
             Category::All | Category::Applications | Category::Actions => {
-                let found: Vec<RowData> = if category == Category::All && !is_empty {
-                    self.backend
-                        .clipboard()
-                        .map(|mgr| mgr.search_history(&query).into_iter().take(3).collect())
-                        .unwrap_or_default()
-                } else {
-                    Vec::new()
-                };
-                let calc = if category == Category::All && !is_empty { Calculator::calculate(&query) } else { None };
-                let ql = query.trim().to_lowercase();
-                let mut extra: Vec<Row> = Vec::new();
-                if let Some(c) = &calc {
-                    extra.push(calc_row(c, format!("calc:{}", c.answer)).row);
+                let show_extra = category == Category::All && !is_empty;
+                let calc = if show_extra { Calculator::calculate(&query) } else { None };
+                let q = Query::new(&query);
+                let mut registry = Registry::default();
+                registry.register(Box::new(CalculatorProvider));
+                if show_extra {
+                    registry.register(Box::new(self.clipboard_provider(3)));
                 }
-                if ql.len() >= 3 && "calculator history".contains(&ql) {
-                    extra.push(Row::simple(RowKind::Command, "calc:history", "Calculator History", "Calculator", "accessories-calculator-symbolic"));
+                let mut extra = registry.instant(&q);
+                if !show_extra {
+                    extra.retain(|r| r.kind == RowKind::Command);
                 }
-                extra.extend(found.iter().map(|r| r.row.clone()));
-                let payloads: HashMap<String, Payload> =
-                    found.into_iter().filter_map(|r| r.payload.map(|p| (r.row.id, p))).collect();
                 let run = {
                     let (this, q) = (self.clone(), query.clone());
                     Rc::new(RootRun::new(move || this.core_sections(&q, &extra)))
@@ -1018,20 +988,11 @@ impl SpotlightWindow {
                     .sections()
                     .iter()
                     .map(|s| {
-                        let rows = s.rows.iter().map(|row| RowData { row: row.clone(), payload: None, calc: None });
-                        (s.title.clone(), rows.collect())
+                        (s.title.clone(), self.attach_all(s.rows.clone(), &calc))
                     })
                     .collect();
-                if category == Category::All && !is_empty {
+                if show_extra {
                     self.add_extra_rows(&query, &mut secs);
-                }
-                for (_, rows) in secs.iter_mut() {
-                    for r in rows.iter_mut() {
-                        r.payload = payloads.get(&r.row.id).cloned();
-                        if r.row.kind == RowKind::Calc {
-                            r.calc = calc.clone();
-                        }
-                    }
                 }
                 if calc.is_some() {
                     secs.retain(|(t, _)| t != "Search the web");
@@ -1054,31 +1015,19 @@ impl SpotlightWindow {
                 secs
             }
             Category::Clipboard => {
-                let rows = self.backend.search_instant(&query, Category::Clipboard, DEFAULT_LIMIT);
-                vec![("Clipboard".to_string(), rows)]
+                let rows = self.clipboard_provider(usize::MAX).instant(&Query::new(&query));
+                vec![("Clipboard".to_string(), self.attach_all(rows, &None))]
             }
             Category::Web => {
                 let rows = self.backend.search_web(&query);
                 vec![("Web".to_string(), rows)]
             }
             Category::Calc => {
-                let mut rows = Vec::new();
-                if let Some(c) = Calculator::calculate(if is_empty { "1+1" } else { &query }) {
-                    rows.push(calc_row(&c, format!("calc:{}", c.answer)));
-                }
-                let hist_rows: Vec<RowData> = self.calc_history.borrow().search(&query).iter().map(|h| {
-                    calc_row(
-                        &CalcResult {
-                            question: h.question.clone(),
-                            answer: h.answer.clone(),
-                            caption_question: h.caption_question.clone(),
-                            caption_answer: h.caption_answer.clone(),
-                        },
-                        format!("calchist:{}", h.id),
-                    )
-                }).collect();
-                rows.extend(hist_rows);
-                vec![("Calculator".to_string(), rows)]
+                let calc_query = if is_empty { "1+1" } else { &query };
+                let mut rows = CalculatorProvider.instant(&Query::new(calc_query));
+                rows.retain(|r| r.kind == RowKind::Calc);
+                rows.extend(CalcHistoryProvider::new(self.calc_history.clone()).instant(&Query::new(&query)));
+                vec![("Calculator".to_string(), self.attach_all(rows, &Calculator::calculate(calc_query)))]
             }
             _ => Vec::new(),
         };
@@ -1109,6 +1058,31 @@ impl SpotlightWindow {
                 s.append_rows(seq, title, hist);
             });
         }
+    }
+
+    fn clipboard_provider(&self, limit: usize) -> ClipboardProvider {
+        let mgr = self.backend.clipboard();
+        let items = move || mgr.as_ref().map(|m| m.get_items().into_iter().map(|i| i.text).collect()).unwrap_or_default();
+        ClipboardProvider::new(items, limit)
+    }
+
+    /// Rows plus what activating them needs: the clipboard payload, or the calculator result
+    /// (`live` for a calculation, the saved row for a history entry).
+    fn attach_all(&self, rows: Vec<Row>, live: &Option<CalcResult>) -> Vec<RowData> {
+        rows.into_iter()
+            .map(|row| {
+                let payload = (row.kind == RowKind::Clipboard)
+                    .then(|| Payload { url: row.id.clone(), mime: clipboard_provider::MIME.to_string(), app: None });
+                let calc = match (row.kind, row.id.strip_prefix("calchist:")) {
+                    (RowKind::Calc, Some(id)) => {
+                        id.parse().ok().and_then(|id| self.calc_history.borrow().get(id)).map(|h| history_result(&h))
+                    }
+                    (RowKind::Calc, None) => live.clone(),
+                    _ => None,
+                };
+                RowData { row, payload, calc }
+            })
+            .collect()
     }
 
     fn show_history(self: &Rc<Self>) {

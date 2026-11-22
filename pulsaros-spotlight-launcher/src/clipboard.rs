@@ -1,5 +1,6 @@
 use crate::config::SpotlightConfig;
-use crate::ui::results::{result_row, RowData};
+use crate::core::clipboard_provider::{clipboard_rows, MIME};
+use crate::ui::results::{Payload, RowData};
 use gtk4::gdk;
 use gtk4::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -231,34 +232,14 @@ impl ClipboardManager {
     }
 
     pub fn search_history(&self, query: &str) -> Vec<RowData> {
-        let items = self.get_items();
-        let q_lower = query.trim().to_lowercase();
-        let mut results = Vec::new();
-
-        for (idx, item) in items.iter().enumerate() {
-            if q_lower.is_empty() || item.text.to_lowercase().contains(&q_lower) {
-                let lines: Vec<&str> = item.text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
-                let mut first_line = lines.first().copied().unwrap_or(&item.text).to_string();
-                if first_line.chars().count() > 60 {
-                    first_line = first_line.chars().take(57).collect::<String>() + "...";
-                }
-
-                let mut preview = item.text.replace('\n', " ⏎ ");
-                if preview.chars().count() > 100 {
-                    preview = preview.chars().take(97).collect::<String>() + "...";
-                }
-
-                results.push(result_row(
-                    format!("clipboard://{}", idx),
-                    first_line,
-                    "text/plain-clipboard".to_string(),
-                    preview,
-                    None,
-                ));
-            }
-        }
-
-        results
+        let texts: Vec<String> = self.get_items().into_iter().map(|i| i.text).collect();
+        clipboard_rows(&texts, query)
+            .into_iter()
+            .map(|row| {
+                let payload = Payload { url: row.id.clone(), mime: MIME.to_string(), app: None };
+                RowData { row, payload: Some(payload), calc: None }
+            })
+            .collect()
     }
 
     pub fn paste_clip(&self, text: &str) {
