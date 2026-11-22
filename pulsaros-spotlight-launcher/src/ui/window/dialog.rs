@@ -8,6 +8,7 @@ pub(super) struct Dialog {
     pub(super) entry: gtk4::Entry,
     pub(super) ok: gtk4::Button,
     pub(super) on_ok: RefCell<Option<Box<dyn Fn(String)>>>,
+    pub(super) backdrop: gtk4::Box,
 }
 
 impl SpotlightWindow {
@@ -39,7 +40,7 @@ impl SpotlightWindow {
         }
         *self.dialog.on_ok.borrow_mut() = Some(on_ok);
         self.x.stack.set_visible(false);
-        self.dialog_backdrop.set_visible(true);
+        self.dialog.backdrop.set_visible(true);
         self.dialog.root.set_visible(true);
         if gtk4::prelude::WidgetExt::is_visible(&self.dialog.entry) {
             self.dialog.entry.grab_focus();
@@ -55,7 +56,7 @@ impl SpotlightWindow {
 
     pub(super) fn close_dialog(&self) {
         if self.dialog.root.is_visible() {
-            self.dialog_backdrop.set_visible(false);
+            self.dialog.backdrop.set_visible(false);
             self.dialog.root.set_visible(false);
             self.x.stack.set_visible(true);
             self.dialog_reset_form();

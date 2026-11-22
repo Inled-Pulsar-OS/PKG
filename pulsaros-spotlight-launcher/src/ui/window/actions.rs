@@ -105,7 +105,7 @@ impl SpotlightWindow {
             "calc_copy" | "calc_paste" | "calc_full" => {
                 let Some(c) = rd.calc.clone() else { return };
                 if !self.in_calc_history() {
-                    self.calc_history.borrow_mut().add(&c);
+                    self.search_state.calc_history.borrow_mut().add(&c);
                 }
                 match action {
                     "calc_copy" => self.copy(&c.answer),
@@ -125,7 +125,7 @@ impl SpotlightWindow {
             "calc_history" => self.enter_calc_history(),
             "calc_del" => {
                 if let Some(n) = id.strip_prefix("calchist:").and_then(|n| n.parse::<u64>().ok()) {
-                    self.calc_history.borrow_mut().delete(n);
+                    self.search_state.calc_history.borrow_mut().delete(n);
                     self.toast("Deleted from history", None);
                     self.do_search(true);
                 }
@@ -139,7 +139,7 @@ impl SpotlightWindow {
                     "Delete All",
                     true,
                     Box::new(move |_| {
-                        s.calc_history.borrow_mut().delete_all();
+                        s.search_state.calc_history.borrow_mut().delete_all();
                         s.toast("History cleared", None);
                         s.do_search(true);
                     }),
@@ -360,23 +360,23 @@ impl SpotlightWindow {
     }
 
     pub(super) fn uninstall(self: &Rc<Self>, desktop_id: String, app_name: String) {
-        self.progress_label.set_label(&format!("Uninstalling {}...", app_name));
-        self.progress_spinner.start();
-        self.progress_revealer.set_reveal_child(true);
+        self.progress.label.set_label(&format!("Uninstalling {}...", app_name));
+        self.progress.spinner.start();
+        self.progress.revealer.set_reveal_child(true);
 
         let (sender, receiver) = std::sync::mpsc::channel::<(bool, String)>();
         let s = self.clone();
         glib::timeout_add_local(Duration::from_millis(50), move || match receiver.try_recv() {
             Ok((success, message)) => {
-                s.progress_spinner.stop();
+                s.progress.spinner.stop();
                 let (text, delay) = if success {
                     (format!("\u{2713} {} uninstalled successfully", app_name), 1800)
                 } else {
-                    s.progress_label.set_tooltip_text(Some(&message));
+                    s.progress.label.set_tooltip_text(Some(&message));
                     (format!("\u{2717} {}", clean_uninstall_message(&message, &app_name)), 4000)
                 };
-                s.progress_label.set_label(&text);
-                let rev = s.progress_revealer.clone();
+                s.progress.label.set_label(&text);
+                let rev = s.progress.revealer.clone();
                 glib::timeout_add_local(Duration::from_millis(delay), move || {
                     rev.set_reveal_child(false);
                     glib::ControlFlow::Break

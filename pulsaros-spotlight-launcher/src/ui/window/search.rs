@@ -19,18 +19,18 @@ impl SpotlightWindow {
         } else {
             self.nav_apply(NavEvent::Typed(true));
         }
-        if let Some(id) = self.debounce_id.borrow_mut().take() {
+        if let Some(id) = self.search_state.debounce_id.borrow_mut().take() {
             id.remove();
         }
         let s = self.clone();
         let id = glib::timeout_add_local(Duration::from_millis(DEBOUNCE_MS), move || {
             // The source has fired: drop the stale handle so a later
             // on_search_changed never removes an already-destroyed source
-            *s.debounce_id.borrow_mut() = None;
+            *s.search_state.debounce_id.borrow_mut() = None;
             s.do_search(false);
             glib::ControlFlow::Break
         });
-        *self.debounce_id.borrow_mut() = Some(id);
+        *self.search_state.debounce_id.borrow_mut() = Some(id);
     }
 
     // ---- searching ---------------------------------------------------------------
@@ -42,7 +42,7 @@ impl SpotlightWindow {
 
     /// Append backend rows to a named section (creating it) and re-render.
     fn append_rows(&self, seq: u64, title: &str, rows: Vec<RowData>) {
-        if self.search_seq.get() != seq || rows.is_empty() {
+        if self.search_state.search_seq.get() != seq || rows.is_empty() {
             return;
         }
         {
@@ -64,6 +64,7 @@ impl SpotlightWindow {
     fn core_sections(&self, query: &str, extra: &[Row]) -> Vec<Section> {
         let commands = self.commands.borrow();
         let data = self
+            .search_state
             .search_data
             .borrow_mut()
             .get_or_insert_with(|| {
@@ -74,7 +75,7 @@ impl SpotlightWindow {
             .clone();
         let settings = self.settings.borrow();
         let frecency = self.frecency.borrow();
-        let states = self.states.borrow();
+        let states = self.search_state.states.borrow();
         let ctx = Ctx {
             apps: &data.0,
             commands: &commands,
@@ -92,8 +93,8 @@ impl SpotlightWindow {
         if self.layout.get() != LayoutState::Panel {
             return;
         }
-        let seq = self.search_seq.get() + 1;
-        self.search_seq.set(seq);
+        let seq = self.search_state.search_seq.get() + 1;
+        self.search_state.search_seq.set(seq);
 
         let query = self.search_entry.text().to_string();
         let category = self.category.get();
@@ -120,7 +121,7 @@ impl SpotlightWindow {
 
         let is_empty = query.trim().is_empty();
         if self.in_calc_history() {
-            let rows = CalcHistoryProvider::new(self.calc_history.clone()).instant(&Query::new(&query));
+            let rows = CalcHistoryProvider::new(self.search_state.calc_history.clone()).instant(&Query::new(&query));
             *self.current.borrow_mut() = vec![("Calculator History".to_string(), self.attach_all(rows, &None))];
             self.render(keep);
             return;
@@ -181,7 +182,7 @@ impl SpotlightWindow {
                 let calc_query = if is_empty { "1+1" } else { &query };
                 let mut rows = CalculatorProvider.instant(&Query::new(calc_query));
                 rows.retain(|r| r.kind == RowKind::Calc);
-                rows.extend(CalcHistoryProvider::new(self.calc_history.clone()).instant(&Query::new(&query)));
+                rows.extend(CalcHistoryProvider::new(self.search_state.calc_history.clone()).instant(&Query::new(&query)));
                 vec![("Calculator".to_string(), self.attach_all(rows, &Calculator::calculate(calc_query)))]
             }
             _ => Vec::new(),
@@ -225,7 +226,7 @@ impl SpotlightWindow {
                     .then(|| Payload { url: row.id.clone(), mime: clipboard_provider::MIME.to_string(), app: None });
                 let calc = match (row.kind, row.id.strip_prefix("calchist:")) {
                     (RowKind::Calc, Some(id)) => {
-                        id.parse().ok().and_then(|id| self.calc_history.borrow().get(id)).map(|h| history_result(&h))
+                        id.parse().ok().and_then(|id| self.search_state.calc_history.borrow().get(id)).map(|h| history_result(&h))
                     }
                     (RowKind::Calc, None) => live.clone(),
                     _ => None,

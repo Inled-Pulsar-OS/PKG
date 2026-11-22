@@ -31,17 +31,21 @@ use std::rc::Rc;
 use std::time::Duration;
 
 mod actions;
+mod args;
 mod chrome;
 mod dialog;
-mod extras;
+mod emoji;
 mod keys;
 mod panel;
+mod scripts;
 mod search;
+mod snippets;
 mod toast;
+mod views;
 use actions::UiAction;
 use chrome::*;
 use dialog::Dialog;
-use extras::{Extras, View};
+use views::{Extras, View};
 #[cfg(test)]
 use keys::bar_event;
 pub(crate) use panel::primary_title;
@@ -59,40 +63,58 @@ pub struct SpotlightWindow {
     category: Cell<Category>,
     /// Which list is shown, how the Panel opened, whether the query was typed.
     nav: RefCell<Nav>,
-    debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
-    search_seq: Rc<Cell<u64>>,
-    calc_history: Rc<RefCell<CalcHistory>>,
-    last_currency: Cell<Option<std::time::Instant>>,
+    search_state: SearchState,
 
     // core state
     store: Store,
     settings: RefCell<Settings>,
     frecency: RefCell<Frecency>,
     commands: RefCell<Vec<Command>>,
-    /// Apps and their ranker index, rebuilt after the next app reload (`None` = stale).
-    search_data: RefCell<Option<Rc<(Vec<AppEntry>, SearchIndex)>>>,
     x: Extras,
-    states: RefCell<HashMap<String, bool>>,
-    last_probe: Cell<Option<std::time::Instant>>,
     current: RefCell<SectionList>,
 
     // ui pieces
     panel: Panel,
     dialog: Dialog,
-    dialog_backdrop: gtk4::Box,
     more_popover: gtk4::Popover,
     category_buttons: RefCell<HashMap<Category, gtk4::ToggleButton>>,
-    loading_bar: gtk4::ProgressBar,
-    loading_count: Cell<u32>,
-    loading_timer: RefCell<Option<glib::SourceId>>,
-    footer_status: gtk4::Label,
-    toast_pill: gtk4::Box,
-    toast_undo: gtk4::Button,
-    toast_cb: RefCell<Option<Rc<dyn Fn()>>>,
-    toast_timer: RefCell<Option<glib::SourceId>>,
+    loading: Loading,
+    toast_ui: ToastUi,
     zoom_provider: gtk4::CssProvider,
 
     layout: Cell<LayoutState>,
+    bar: Bar,
+    progress: Progress,
+}
+
+/// Debounce, search sequencing and the caches the search flow reads.
+struct SearchState {
+    debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
+    search_seq: Rc<Cell<u64>>,
+    calc_history: Rc<RefCell<CalcHistory>>,
+    last_currency: Cell<Option<std::time::Instant>>,
+    /// Apps and their ranker index, rebuilt after the next app reload (`None` = stale).
+    search_data: RefCell<Option<Rc<(Vec<AppEntry>, SearchIndex)>>>,
+    states: RefCell<HashMap<String, bool>>,
+    last_probe: Cell<Option<std::time::Instant>>,
+}
+
+struct Loading {
+    bar: gtk4::ProgressBar,
+    count: Cell<u32>,
+    timer: RefCell<Option<glib::SourceId>>,
+}
+
+struct ToastUi {
+    status: gtk4::Label,
+    pill: gtk4::Box,
+    undo: gtk4::Button,
+    cb: RefCell<Option<Rc<dyn Fn()>>>,
+    timer: RefCell<Option<glib::SourceId>>,
+}
+
+/// The mode-button bar and the pointer tracking that reveals it.
+struct Bar {
     /// The four round mode buttons; visible only in `IdleModes`.
     mode_buttons: gtk4::Box,
     buttons_revealer: gtk4::Revealer,
@@ -107,10 +129,12 @@ pub struct SpotlightWindow {
     pointer_origin: Cell<Option<(f64, f64)>>,
     /// Everything below the header row; hidden while the layout is Idle.
     panel_parts: Vec<gtk4::Widget>,
+}
 
-    progress_revealer: gtk4::Revealer,
-    progress_spinner: gtk4::Spinner,
-    progress_label: gtk4::Label,
+struct Progress {
+    revealer: gtk4::Revealer,
+    spinner: gtk4::Spinner,
+    label: gtk4::Label,
 }
 
 fn app_entry(a: &crate::apps::DesktopApp) -> AppEntry {
@@ -438,18 +462,20 @@ impl SpotlightWindow {
             backend,
             category: Cell::new(Category::All),
             nav: RefCell::new(Nav::default()),
-            debounce_id: Rc::new(RefCell::new(None)),
-            search_seq: Rc::new(Cell::new(0)),
-            calc_history: Rc::new(RefCell::new(CalcHistory::open())),
-            last_currency: Cell::new(None),
+            search_state: SearchState {
+                debounce_id: Rc::new(RefCell::new(None)),
+                search_seq: Rc::new(Cell::new(0)),
+                calc_history: Rc::new(RefCell::new(CalcHistory::open())),
+                last_currency: Cell::new(None),
+                search_data: RefCell::new(None),
+                states: RefCell::new(HashMap::new()),
+                last_probe: Cell::new(None),
+            },
             store,
             settings: RefCell::new(settings),
             frecency: RefCell::new(frecency),
             commands: RefCell::new(Vec::new()),
-            search_data: RefCell::new(None),
             x,
-            states: RefCell::new(HashMap::new()),
-            last_probe: Cell::new(None),
             current: RefCell::new(Vec::new()),
             panel: Panel {
                 root: panel_root,
@@ -466,31 +492,31 @@ impl SpotlightWindow {
                 entry: dialog_entry,
                 ok: dialog_ok.clone(),
                 on_ok: RefCell::new(None),
+                backdrop: dialog_backdrop,
             },
-            dialog_backdrop,
             more_popover,
             category_buttons: RefCell::new(cat_buttons),
-            loading_bar,
-            loading_count: Cell::new(0),
-            loading_timer: RefCell::new(None),
-            footer_status,
-            toast_pill,
-            toast_undo,
-            toast_cb: RefCell::new(None),
-            toast_timer: RefCell::new(None),
+            loading: Loading { bar: loading_bar, count: Cell::new(0), timer: RefCell::new(None) },
+            toast_ui: ToastUi {
+                status: footer_status,
+                pill: toast_pill,
+                undo: toast_undo,
+                cb: RefCell::new(None),
+                timer: RefCell::new(None),
+            },
             zoom_provider,
             layout: Cell::new(LayoutState::Idle),
-            mode_buttons,
-            buttons_revealer,
-            size_anim: RefCell::new(None),
-            global_pointer: Cell::new(false),
-            hypr_poll: RefCell::new(None),
-            revealed: Cell::new(false),
-            pointer_origin: Cell::new(None),
-            panel_parts,
-            progress_revealer,
-            progress_spinner,
-            progress_label,
+            bar: Bar {
+                mode_buttons,
+                buttons_revealer,
+                size_anim: RefCell::new(None),
+                global_pointer: Cell::new(false),
+                hypr_poll: RefCell::new(None),
+                revealed: Cell::new(false),
+                pointer_origin: Cell::new(None),
+                panel_parts,
+            },
+            progress: Progress { revealer: progress_revealer, spinner: progress_spinner, label: progress_label },
         });
 
         // Late-bound callbacks that need the Rc<Self>.
@@ -512,8 +538,8 @@ impl SpotlightWindow {
         let s = spotlight.clone();
         spotlight.dialog.entry.connect_activate(move |_| s.accept_dialog());
         let s = spotlight.clone();
-        spotlight.toast_undo.connect_clicked(move |_| {
-            let cb = s.toast_cb.borrow_mut().take();
+        spotlight.toast_ui.undo.connect_clicked(move |_| {
+            let cb = s.toast_ui.cb.borrow_mut().take();
             if let Some(cb) = cb {
                 cb();
             }
@@ -573,7 +599,7 @@ impl SpotlightWindow {
     /// coordinates). Reveals the mode buttons from any pointer travel, not only over the bar.
     pub fn handle_global_pointer(&self, x: f64, y: f64) {
         if self.window.is_visible() {
-            self.global_pointer.set(true);
+            self.bar.global_pointer.set(true);
             self.on_pointer(x, y);
         }
     }
@@ -584,13 +610,13 @@ impl SpotlightWindow {
     /// extension instead (`handle_global_pointer`), so this only runs under Hyprland.
     fn start_hypr_pointer_poll(self: &Rc<Self>) {
         let Some(path) = hypr_socket_path() else { return };
-        if self.hypr_poll.borrow().is_some() {
+        if self.bar.hypr_poll.borrow().is_some() {
             return;
         }
         let s = self.clone();
         let id = glib::timeout_add_local(Duration::from_millis(30), move || {
             if !s.window.is_visible() {
-                s.hypr_poll.borrow_mut().take();
+                s.bar.hypr_poll.borrow_mut().take();
                 return glib::ControlFlow::Break;
             }
             if s.layout.get() == LayoutState::Idle {
@@ -600,7 +626,7 @@ impl SpotlightWindow {
             }
             glib::ControlFlow::Continue
         });
-        *self.hypr_poll.borrow_mut() = Some(id);
+        *self.bar.hypr_poll.borrow_mut() = Some(id);
     }
 
     pub fn present_with_focus(self: &Rc<Self>) {
@@ -611,8 +637,8 @@ impl SpotlightWindow {
             self.window.remove_css_class("liquid-glass");
         }
 
-        self.revealed.set(false);
-        self.pointer_origin.set(None);
+        self.bar.revealed.set(false);
+        self.bar.pointer_origin.set(None);
         self.reset_to_root();
         self.window.present();
         self.start_hypr_pointer_poll();
@@ -640,7 +666,7 @@ impl SpotlightWindow {
         self.leave_view();
         self.nav_apply(NavEvent::ToRoot);
         self.category.set(Category::All);
-        self.apply_layout(if self.revealed.get() { LayoutState::IdleModes } else { LayoutState::Idle });
+        self.apply_layout(if self.bar.revealed.get() { LayoutState::IdleModes } else { LayoutState::Idle });
         self.set_mode(Category::All);
         self.search_entry.set_text("");
     }
@@ -649,14 +675,14 @@ impl SpotlightWindow {
     fn apply_layout(&self, state: LayoutState) {
         self.layout.set(state);
         let idle = state != LayoutState::Panel;
-        self.buttons_revealer.set_reveal_child(state == LayoutState::IdleModes);
+        self.bar.buttons_revealer.set_reveal_child(state == LayoutState::IdleModes);
         if state == LayoutState::IdleModes {
-            self.revealed.set(true);
+            self.bar.revealed.set(true);
         }
         if idle {
             self.nav_apply(NavEvent::Collapsed);
         }
-        for w in &self.panel_parts {
+        for w in &self.bar.panel_parts {
             w.set_visible(!idle);
         }
         self.mode_icon.set_pixel_size(if idle { 24 } else { 28 });
@@ -680,7 +706,7 @@ impl SpotlightWindow {
                 win.set_default_size(w, height);
             }
         };
-        if let Some(a) = self.size_anim.borrow_mut().take() {
+        if let Some(a) = self.bar.size_anim.borrow_mut().take() {
             a.pause();
         }
         let from = self.window.height();
@@ -694,7 +720,7 @@ impl SpotlightWindow {
         let anim = adw::TimedAnimation::new(&self.window, from as f64, h as f64, 200, target);
         anim.set_easing(adw::Easing::EaseOutCubic);
         anim.play();
-        *self.size_anim.borrow_mut() = Some(anim);
+        *self.bar.size_anim.borrow_mut() = Some(anim);
     }
 
     // ---- state persistence ---------------------------------------------------
@@ -711,12 +737,12 @@ impl SpotlightWindow {
 
     /// Fetch currency rates off the UI thread (cache-aware, honours config.currency_rates).
     fn refresh_currencies(self: &Rc<Self>) {
-        if let Some(t) = self.last_currency.get() {
+        if let Some(t) = self.search_state.last_currency.get() {
             if t.elapsed() < Duration::from_secs(1800) {
                 return;
             }
         }
-        self.last_currency.set(Some(std::time::Instant::now()));
+        self.search_state.last_currency.set(Some(std::time::Instant::now()));
         self.loading_begin();
         let (tx, rx) = std::sync::mpsc::channel::<bool>();
         std::thread::spawn(move || {
@@ -741,12 +767,12 @@ impl SpotlightWindow {
 
     /// Probe command states off the UI thread, then refresh the list.
     fn refresh_states(self: &Rc<Self>) {
-        if let Some(t) = self.last_probe.get() {
+        if let Some(t) = self.search_state.last_probe.get() {
             if t.elapsed() < Duration::from_secs(5) {
                 return;
             }
         }
-        self.last_probe.set(Some(std::time::Instant::now()));
+        self.search_state.last_probe.set(Some(std::time::Instant::now()));
         self.loading_begin();
         let (tx, rx) = std::sync::mpsc::channel::<HashMap<String, bool>>();
         let cmds = self.commands.borrow().clone();
@@ -756,7 +782,7 @@ impl SpotlightWindow {
         let s = self.clone();
         glib::timeout_add_local(Duration::from_millis(30), move || match rx.try_recv() {
             Ok(map) => {
-                *s.states.borrow_mut() = map;
+                *s.search_state.states.borrow_mut() = map;
                 s.loading_end();
                 if s.window.is_visible() {
                     s.do_search(true);
@@ -806,13 +832,13 @@ impl SpotlightWindow {
         let motion = gtk4::EventControllerMotion::new();
         motion.set_propagation_phase(gtk4::PropagationPhase::Capture);
         motion.connect_motion(move |_, x, y| {
-            if !s.global_pointer.get() {
+            if !s.bar.global_pointer.get() {
                 s.on_pointer(x, y);
             }
         });
         self.window.add_controller(motion);
 
-        let mut child = self.mode_buttons.first_child();
+        let mut child = self.bar.mode_buttons.first_child();
         for (n, _) in BAR_BUTTONS {
             let Some(w) = child else { break };
             child = w.next_sibling();
@@ -826,7 +852,7 @@ impl SpotlightWindow {
         self.backend.set_on_apps_updated(move || {
             let s = s.clone();
             glib::idle_add_local(move || {
-                *s.search_data.borrow_mut() = None;
+                *s.search_state.search_data.borrow_mut() = None;
                 if s.window.is_visible() {
                     s.do_search(true);
                 }

@@ -123,13 +123,13 @@ impl SpotlightWindow {
     }
 
     pub(super) fn layout_ctx(&self) -> LayoutCtx {
-        LayoutCtx { revealed: self.revealed.get(), pointer_origin: self.pointer_origin.get(), ..LayoutCtx::default() }
+        LayoutCtx { revealed: self.bar.revealed.get(), pointer_origin: self.bar.pointer_origin.get(), ..LayoutCtx::default() }
     }
 
     pub(super) fn on_pointer(&self, x: f64, y: f64) {
         let o = layout::transition(self.layout.get(), &self.layout_ctx(), LayoutEvent::Pointer { x, y });
         if o.action == LayoutAction::RecordPointer {
-            self.pointer_origin.set(Some((x, y)));
+            self.bar.pointer_origin.set(Some((x, y)));
         }
         if o.state != self.layout.get() {
             self.apply_layout(o.state);
