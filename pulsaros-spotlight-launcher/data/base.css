@@ -90,6 +90,25 @@ button.disc-button:hover {
     background-color: alpha(@window_fg_color, 0.10);
 }
 
+/* round mode buttons shown beside the idle pill */
+.mode-buttons {
+    margin-left: 12px;
+}
+button.mode-button {
+    min-width: 60px;
+    min-height: 60px;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid alpha(@window_fg_color, 0.14);
+    background-color: alpha(@window_fg_color, 0.06);
+    box-shadow: none;
+    color: alpha(@window_fg_color, 0.8);
+    -gtk-icon-size: 26px;
+}
+button.mode-button:hover {
+    background-color: alpha(@window_fg_color, 0.12);
+}
+
 /* thin loading bar under the header */
 progressbar.loading-bar {
     min-height: 2px;

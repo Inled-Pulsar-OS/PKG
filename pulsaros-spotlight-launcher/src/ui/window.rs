@@ -46,6 +46,11 @@ const BASE_H: i32 = 580;
 /// Idle pill size (before zoom).
 const PILL_W: i32 = 740;
 const PILL_H: i32 = 60;
+/// Mode button diameter and the gap between bar items (before zoom).
+const MODE_BTN: f64 = 60.0;
+const MODE_GAP: f64 = 12.0;
+/// Bar buttons: (shortcut number, tooltip). Order matches `shortcuts::mode_id`.
+const BAR_BUTTONS: [(usize, &str); 4] = [(1, "Applications"), (2, "Files"), (3, "Actions"), (4, "Clipboard")];
 const ZOOM_MIN: f64 = 0.8;
 const ZOOM_MAX: f64 = 1.6;
 
@@ -122,6 +127,12 @@ pub struct SpotlightWindow {
     zoom_provider: gtk4::CssProvider,
 
     layout: Cell<LayoutState>,
+    /// The four round mode buttons; visible only in `IdleModes`.
+    mode_buttons: gtk4::Box,
+    /// The buttons were shown at some point since the window opened.
+    revealed: Cell<bool>,
+    /// First pointer position seen since the window opened.
+    pointer_origin: Cell<Option<(f64, f64)>>,
     /// Everything below the header row; hidden while the layout is Idle.
     panel_parts: Vec<gtk4::Widget>,
 
@@ -269,7 +280,9 @@ fn zoom_css(z: f64) -> String {
          window.spotlight-window .icon-tile {{ min-width: {}px; min-height: {}px; }}
          window.spotlight-window .result-icon {{ -gtk-icon-size: {}px; }}
          window.spotlight-window .search-header {{ min-height: {}px; }}
-         window.spotlight-window.idle .search-header {{ min-height: {}px; }}",
+         window.spotlight-window.idle .search-header {{ min-height: {}px; }}
+         window.spotlight-window button.mode-button {{ min-width: {}px; min-height: {}px; -gtk-icon-size: {}px; }}
+         window.spotlight-window .mode-buttons {{ margin-left: {}px; }}",
         p(13.0),
         p(30.0),
         p(56.0),
@@ -280,7 +293,11 @@ fn zoom_css(z: f64) -> String {
         p(44.0),
         p(40.0),
         p(76.0),
-        p(PILL_H as f64)
+        p(PILL_H as f64),
+        p(MODE_BTN),
+        p(MODE_BTN),
+        p(26.0),
+        p(MODE_GAP)
     )
 }
 
@@ -371,6 +388,24 @@ impl SpotlightWindow {
         search_container.append(&search_entry);
         search_container.append(&x.arg_box);
         search_container.append(&more_button);
+
+        let mode_buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, MODE_GAP as i32);
+        mode_buttons.add_css_class("mode-buttons");
+        mode_buttons.set_visible(false);
+        for (n, tip) in BAR_BUTTONS {
+            let img = gtk4::Image::new();
+            img.set_pixel_size(26);
+            let glyph = shortcuts::mode_id(n).and_then(|id| CATEGORIES.iter().find(|c| c.0 == id)).map_or("spotlight", |c| c.2);
+            set_mode_icon(&img, glyph);
+            let b = gtk4::Button::new();
+            b.set_child(Some(&img));
+            b.add_css_class("mode-button");
+            b.set_focusable(false);
+            b.set_valign(gtk4::Align::Center);
+            b.set_tooltip_text(Some(tip));
+            mode_buttons.append(&b);
+        }
+        search_container.append(&mode_buttons);
         main_box.append(&search_container);
 
         // -- Category bar (tabs) --
@@ -631,6 +666,9 @@ impl SpotlightWindow {
             toast_timer: RefCell::new(None),
             zoom_provider,
             layout: Cell::new(LayoutState::Idle),
+            mode_buttons,
+            revealed: Cell::new(false),
+            pointer_origin: Cell::new(None),
             panel_parts,
             indexing_revealer,
             indexing_label,
@@ -726,6 +764,8 @@ impl SpotlightWindow {
             self.window.remove_css_class("liquid-glass");
         }
 
+        self.revealed.set(false);
+        self.pointer_origin.set(None);
         self.reset_to_root();
         self.window.present();
         self.search_entry.grab_focus();
@@ -743,15 +783,19 @@ impl SpotlightWindow {
         self.history_mode.set(false);
         self.calc_hist_mode.set(false);
         *self.category.borrow_mut() = "all".to_string();
-        self.apply_layout(LayoutState::Idle);
+        self.apply_layout(if self.revealed.get() { LayoutState::IdleModes } else { LayoutState::Idle });
         self.set_mode(0);
         self.search_entry.set_text("");
     }
 
-    /// Show only the header row in Idle, the full window otherwise.
+    /// Show only the header row in a bar state, the full window in the Panel.
     fn apply_layout(&self, state: LayoutState) {
         self.layout.set(state);
-        let idle = state == LayoutState::Idle;
+        let idle = state != LayoutState::Panel;
+        self.mode_buttons.set_visible(state == LayoutState::IdleModes);
+        if state == LayoutState::IdleModes {
+            self.revealed.set(true);
+        }
         for w in &self.panel_parts {
             w.set_visible(!idle);
         }
@@ -764,7 +808,7 @@ impl SpotlightWindow {
     }
 
     fn apply_size(&self, zoom: f64) {
-        let (w, h) = if self.layout.get() == LayoutState::Idle { (PILL_W, PILL_H) } else { (BASE_W, BASE_H) };
+        let (w, h) = if self.layout.get() != LayoutState::Panel { (PILL_W, PILL_H) } else { (BASE_W, BASE_H) };
         self.window.set_size_request((w as f64 * zoom) as i32, (h as f64 * zoom) as i32);
     }
 
@@ -982,6 +1026,23 @@ impl SpotlightWindow {
         key_ctrl.connect_key_pressed(move |_, keyval, _, state| s.on_key_pressed(keyval, state));
         self.window.add_controller(key_ctrl);
 
+        // Pointer travel reveals the mode buttons (anywhere over the bar).
+        let s = self.clone();
+        let motion = gtk4::EventControllerMotion::new();
+        motion.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        motion.connect_motion(move |_, x, y| s.on_pointer(x, y));
+        self.window.add_controller(motion);
+
+        let mut child = self.mode_buttons.first_child();
+        for (n, _) in BAR_BUTTONS {
+            let Some(w) = child else { break };
+            child = w.next_sibling();
+            if let Some(b) = w.downcast_ref::<gtk4::Button>() {
+                let s = self.clone();
+                b.connect_clicked(move |_| s.open_bar_mode(n));
+            }
+        }
+
         let s = self.clone();
         self.backend.set_on_apps_updated(move || {
             let s = s.clone();
@@ -1068,8 +1129,8 @@ impl SpotlightWindow {
     }
 
     fn do_search(self: &Rc<Self>, keep: bool) {
-        // Idle draws no results: skip the root search (also from state probes and app updates).
-        if self.layout.get() == LayoutState::Idle {
+        // A bar state draws no results: skip the root search (also from state probes and app updates).
+        if self.layout.get() != LayoutState::Panel {
             return;
         }
         let seq = self.search_seq.get() + 1;
@@ -2144,14 +2205,46 @@ impl SpotlightWindow {
         glib::Propagation::Proceed
     }
 
+    fn layout_ctx(&self) -> LayoutCtx {
+        LayoutCtx { revealed: self.revealed.get(), pointer_origin: self.pointer_origin.get(), ..LayoutCtx::default() }
+    }
+
+    fn on_pointer(&self, x: f64, y: f64) {
+        let o = layout::transition(self.layout.get(), &self.layout_ctx(), LayoutEvent::Pointer { x, y });
+        if o.action == LayoutAction::RecordPointer {
+            self.pointer_origin.set(Some((x, y)));
+        }
+        if o.state != self.layout.get() {
+            self.apply_layout(o.state);
+        }
+    }
+
+    /// Open the Panel in mode `n` (1-based, as Alt+n) with an empty query.
+    fn open_bar_mode(self: &Rc<Self>, n: usize) {
+        let Some(id) = shortcuts::mode_id(n) else { return };
+        self.apply_layout(LayoutState::Panel);
+        self.set_category_by_id(id);
+        self.search_entry.grab_focus();
+    }
+
     /// Keys in a bar state (Idle, IdleModes): expand to the Panel as the layout module says.
     /// Left and Right do nothing there. `None` leaves the key to the normal handling.
     fn bar_key(self: &Rc<Self>, keyval: gdk::Key, mods: Mods, act: Option<Act>) -> Option<glib::Propagation> {
         if matches!(keyval, gdk::Key::Left | gdk::Key::Right) && !mods.ctrl && !mods.alt {
             return Some(glib::Propagation::Stop);
         }
+        if let Some(step @ (Act::CatNext | Act::CatPrev)) = act {
+            let o = layout::transition(self.layout.get(), &self.layout_ctx(), LayoutEvent::Tab);
+            if o.state != self.layout.get() {
+                self.apply_layout(o.state);
+            } else {
+                self.apply_layout(LayoutState::Panel);
+                self.cycle_category(if step == Act::CatNext { 1 } else { -1 });
+            }
+            return Some(glib::Propagation::Stop);
+        }
         let event = bar_event(keyval, mods, act)?;
-        match layout::transition(self.layout.get(), &LayoutCtx::default(), event).action {
+        match layout::transition(self.layout.get(), &self.layout_ctx(), event).action {
             LayoutAction::ShowHome => {
                 self.apply_layout(LayoutState::Panel);
                 self.do_search(false);
@@ -2166,8 +2259,7 @@ impl SpotlightWindow {
             }
             LayoutAction::SwitchMode(_) => {
                 let Some(Act::Mode(n)) = act else { return None };
-                self.apply_layout(LayoutState::Panel);
-                self.set_category_by_id(shortcuts::mode_id(n)?);
+                self.open_bar_mode(n);
             }
             _ => return None,
         }
