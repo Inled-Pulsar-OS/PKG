@@ -2,7 +2,9 @@ use crate::core::root_search::{Row, RowKind};
 use crate::apps::DesktopApp;
 use crate::utils::get_file_icon;
 use gtk4::gdk;
+use gtk4::gio;
 use gtk4::glib;
+use gtk4::glib::BoxedAnyObject;
 use gtk4::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -448,14 +450,39 @@ pub fn kind_label(r: &RowData) -> &'static str {
     }
 }
 
+/// A list slot: the item plus its quick-key ordinal among rows (headers carry 0).
+struct Slot {
+    item: Item,
+    n: usize,
+}
+
+impl Slot {
+    /// Same on screen. Rows past the quick-key range ignore a shifted ordinal.
+    fn same(&self, o: &Slot) -> bool {
+        let item = match (&self.item, &o.item) {
+            (Item::Header(x), Item::Header(y)) => x == y,
+            (Item::Row(x), Item::Row(y)) => x.row == y.row,
+            _ => false,
+        };
+        item && (self.n == o.n || (self.n >= 9 && o.n >= 9))
+    }
+}
+
+type Pictures = Rc<RefCell<HashMap<String, Vec<glib::WeakRef<gtk4::Stack>>>>>;
+
+/// Thumbnail job queue plus the cells waiting on each result.
+#[derive(Clone)]
+struct Thumbs {
+    tx: mpsc::Sender<ThumbJob>,
+    pictures: Pictures,
+}
+
 pub struct ResultView {
-    list_box: gtk4::ListBox,
+    list: gtk4::ListView,
+    store: gio::ListStore,
+    selection: gtk4::SingleSelection,
     scroll: gtk4::ScrolledWindow,
     items: Rc<RefCell<Vec<Item>>>,
-    selected: Rc<Cell<Option<usize>>>,
-    last_pointer: Rc<Cell<(f64, f64)>>,
-    thumb_job_tx: RefCell<Option<mpsc::Sender<ThumbJob>>>,
-    thumb_pictures: Rc<RefCell<HashMap<String, Vec<gtk4::Stack>>>>,
     thumb_poll: RefCell<Option<glib::SourceId>>,
 }
 
@@ -468,11 +495,103 @@ impl ResultView {
         G: Fn() + 'static,
         S: Fn(Option<RowData>) + 'static,
     {
-        let list_box = gtk4::ListBox::builder()
-            .selection_mode(gtk4::SelectionMode::Single)
-            .activate_on_single_click(true)
-            .build();
-        list_box.add_css_class("results-list");
+        let store = gio::ListStore::new::<BoxedAnyObject>();
+        let selection = gtk4::SingleSelection::new(Some(store.clone()));
+        selection.set_autoselect(false);
+        selection.set_can_unselect(true);
+        let (job_tx, result_rx) = spawn_thumbnail_pool();
+        let thumbs = Thumbs { tx: job_tx, pictures: Rc::new(RefCell::new(HashMap::new())) };
+
+        let on_context: Rc<dyn Fn()> = Rc::new(on_context);
+        let last_pointer = Rc::new(Cell::new((-1.0, -1.0)));
+
+        // Rows are recycled: `setup` makes an empty holder, `bind` fills it for one slot.
+        let factory = gtk4::SignalListItemFactory::new();
+        {
+            let selection = selection.clone();
+            factory.connect_setup(move |_, obj| {
+                let li = obj.downcast_ref::<gtk4::ListItem>().expect("ListItem");
+                let holder = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+                li.set_child(Some(&holder));
+
+                // Right click selects the row, then opens its context menu.
+                let click = gtk4::GestureClick::builder().button(3).build();
+                let (weak, sel, ctx) = (li.downgrade(), selection.clone(), on_context.clone());
+                click.connect_pressed(move |g, _, _, _| {
+                    g.set_state(gtk4::EventSequenceState::Claimed);
+                    if let Some(li) = weak.upgrade().filter(|li| li.is_selectable()) {
+                        sel.set_selected(li.position());
+                        ctx();
+                    }
+                });
+                holder.add_controller(click);
+
+                // Hover selects only after real pointer motion: `motion` is not
+                // emitted when rows scroll or are rebuilt under a still pointer.
+                let motion = gtk4::EventControllerMotion::new();
+                let (weak, sel, last) = (li.downgrade(), selection.clone(), last_pointer.clone());
+                let h = holder.clone();
+                motion.connect_motion(move |_, x, y| {
+                    let Some(li) = weak.upgrade().filter(|li| li.is_selectable()) else { return };
+                    let Some(root) = h.ancestor(gtk4::ListView::static_type()) else { return };
+                    let Some(p) = h.compute_point(&root, &gtk4::graphene::Point::new(x as f32, y as f32)) else { return };
+                    let (x, y) = (p.x() as f64, p.y() as f64);
+                    let (lx, ly) = last.get();
+                    if (lx - x).abs() < 1.0 && (ly - y).abs() < 1.0 {
+                        return;
+                    }
+                    last.set((x, y));
+                    if sel.selected() != li.position() {
+                        sel.set_selected(li.position());
+                    }
+                });
+                holder.add_controller(motion);
+            });
+        }
+        {
+            let thumbs = thumbs.clone();
+            factory.connect_bind(move |_, obj| {
+                let li = obj.downcast_ref::<gtk4::ListItem>().expect("ListItem");
+                let (Some(holder), Some(slot)) = (li.child().and_downcast::<gtk4::Box>(), li.item().and_downcast::<BoxedAnyObject>())
+                else {
+                    return;
+                };
+                let slot = slot.borrow::<Slot>();
+                let row_widget = holder.parent();
+                match &slot.item {
+                    Item::Header(t) => {
+                        li.set_selectable(false);
+                        li.set_activatable(false);
+                        if let Some(w) = &row_widget {
+                            w.add_css_class("section-row");
+                        }
+                        let l = gtk4::Label::builder().label(t).xalign(0.0).build();
+                        l.add_css_class("section-header");
+                        holder.append(&l);
+                    }
+                    Item::Row(r) => {
+                        li.set_selectable(true);
+                        li.set_activatable(true);
+                        if let Some(w) = &row_widget {
+                            w.remove_css_class("section-row");
+                        }
+                        holder.append(&Self::build_row(&thumbs, r, slot.n));
+                    }
+                }
+            });
+        }
+        factory.connect_unbind(|_, obj| {
+            if let Some(holder) = obj.downcast_ref::<gtk4::ListItem>().and_then(|li| li.child()).and_downcast::<gtk4::Box>() {
+                while let Some(c) = holder.first_child() {
+                    holder.remove(&c);
+                }
+            }
+        });
+
+        let list = gtk4::ListView::new(Some(selection.clone()), Some(factory));
+        list.set_single_click_activate(true);
+        list.set_focusable(false);
+        list.add_css_class("results-list");
 
         let scroll = gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
@@ -480,85 +599,28 @@ impl ResultView {
             .vexpand(true)
             .build();
         scroll.add_css_class("results-area");
-        scroll.set_child(Some(&list_box));
+        scroll.set_child(Some(&list));
 
         let view = Self {
-            list_box,
+            list,
+            store,
+            selection,
             scroll,
             items: Rc::new(RefCell::new(Vec::new())),
-            selected: Rc::new(Cell::new(None)),
-            last_pointer: Rc::new(Cell::new((-1.0, -1.0))),
-            thumb_job_tx: RefCell::new(None),
-            thumb_pictures: Rc::new(RefCell::new(HashMap::new())),
             thumb_poll: RefCell::new(None),
         };
 
-        let sel = view.selected.clone();
         let items = view.items.clone();
-        let lb_clone = view.list_box.clone();
-        view.list_box.connect_row_selected(move |_, row| {
-            let mut child = lb_clone.first_child();
-            while let Some(c) = child {
-                c.remove_css_class("active-selection");
-                if let Some(r) = c.downcast_ref::<gtk4::ListBoxRow>() {
-                    if let Some(inner) = r.child() {
-                        inner.remove_css_class("active-selection");
-                    }
-                }
-                child = c.next_sibling();
-            }
-            if let Some(r) = row {
-                r.add_css_class("active-selection");
-                if let Some(inner) = r.child() {
-                    inner.add_css_class("active-selection");
-                }
-            }
-            let idx = row.map(|r| r.index() as usize);
-            sel.set(idx);
-            let data = idx.and_then(|i| match items.borrow().get(i) {
+        view.selection.connect_selected_notify(move |sel| {
+            let data = match items.borrow().get(sel.selected() as usize) {
                 Some(Item::Row(r)) => Some(r.clone()),
                 _ => None,
-            });
+            };
             on_select(data);
         });
+        view.list.connect_activate(move |_, _| on_activate());
 
-        view.list_box.connect_row_activated(move |_, _| on_activate());
-
-        let click = gtk4::GestureClick::builder().button(3).build();
-        let lb = view.list_box.clone();
-        click.connect_pressed(move |g, _, _, y| {
-            g.set_state(gtk4::EventSequenceState::Claimed);
-            if let Some(r) = lb.row_at_y(y as i32) {
-                if r.is_selectable() {
-                    lb.select_row(Some(&r));
-                    on_context();
-                }
-            }
-        });
-        view.list_box.add_controller(click);
-
-        // Hover selects only after real pointer motion: `motion` is not
-        // emitted when rows scroll or are rebuilt under a still pointer.
-        let motion = gtk4::EventControllerMotion::new();
-        let lb = view.list_box.clone();
-        let last = view.last_pointer.clone();
-        motion.connect_motion(move |_, x, y| {
-            let (lx, ly) = last.get();
-            if (lx - x).abs() < 1.0 && (ly - y).abs() < 1.0 {
-                return;
-            }
-            last.set((x, y));
-            if let Some(r) = lb.row_at_y(y as i32) {
-                if r.is_selectable() && !r.is_selected() {
-                    lb.select_row(Some(&r));
-                }
-            }
-        });
-        view.list_box.add_controller(motion);
-
-        let (job_tx, result_rx) = spawn_thumbnail_pool();
-        *view.thumb_job_tx.borrow_mut() = Some(job_tx);
-        view.start_thumbnail_poll(result_rx);
+        view.start_thumbnail_poll(thumbs.pictures.clone(), result_rx);
         view
     }
 
@@ -566,16 +628,20 @@ impl ResultView {
         &self.scroll
     }
 
+    fn selected(&self) -> Option<usize> {
+        Some(self.selection.selected() as usize).filter(|i| *i < self.items.borrow().len())
+    }
+
     pub fn selected_row(&self) -> Option<RowData> {
-        let idx = self.selected.get()?;
-        match self.items.borrow().get(idx) {
+        match self.items.borrow().get(self.selected()?) {
             Some(Item::Row(r)) => Some(r.clone()),
             _ => None,
         }
     }
 
     /// Replace the list. With `keep_selection` the previously selected row id
-    /// stays selected when it is still present.
+    /// stays selected when it is still present. Only the changed tail of the
+    /// store is replaced, so rows already shown (and their thumbnails) stay.
     pub fn set_sections(&self, sections: Vec<(String, Vec<RowData>)>, keep_selection: bool) {
         let prev_id = if keep_selection { self.selected_row().map(|r| r.row.id) } else { None };
 
@@ -587,48 +653,34 @@ impl ResultView {
             items.push(Item::Header(title));
             items.extend(rows.into_iter().take(300).map(Item::Row));
         }
+        let mut n = 0;
+        let slots: Vec<Slot> = items
+            .iter()
+            .map(|it| match it {
+                Item::Header(_) => Slot { item: it.clone(), n: 0 },
+                Item::Row(_) => {
+                    n += 1;
+                    Slot { item: it.clone(), n: n - 1 }
+                }
+            })
+            .collect();
 
-        let same = {
-            let old = self.items.borrow();
-            old.len() == items.len()
-                && old.iter().zip(items.iter()).all(|(a, b)| match (a, b) {
-                    (Item::Header(x), Item::Header(y)) => x == y,
-                    (Item::Row(x), Item::Row(y)) => x.row == y.row,
-                    _ => false,
-                })
+        let old_len = self.store.n_items() as usize;
+        let same = |i: usize| {
+            self.store
+                .item(i as u32)
+                .and_downcast::<BoxedAnyObject>()
+                .is_some_and(|o| o.borrow::<Slot>().same(&slots[i]))
         };
-        if same {
+        let keep = (0..old_len.min(slots.len())).take_while(|i| same(*i)).count();
+        if keep == old_len && keep == slots.len() {
             return;
         }
 
-        self.thumb_pictures.borrow_mut().clear();
-        self.selected.set(None);
-        while let Some(child) = self.list_box.first_child() {
-            self.list_box.remove(&child);
-        }
-
-        let mut n = 0usize;
-        for it in &items {
-            match it {
-                Item::Header(t) => {
-                    let row = gtk4::ListBoxRow::new();
-                    row.set_selectable(false);
-                    row.set_activatable(false);
-                    row.add_css_class("section-row");
-                    let l = gtk4::Label::builder().label(t).xalign(0.0).build();
-                    l.add_css_class("section-header");
-                    row.set_child(Some(&l));
-                    self.list_box.append(&row);
-                }
-                Item::Row(r) => {
-                    let row = gtk4::ListBoxRow::new();
-                    row.set_child(Some(&self.build_row(r, n)));
-                    self.list_box.append(&row);
-                    n += 1;
-                }
-            }
-        }
+        // Update the shared list first: the selection handler reads it during the splice.
         *self.items.borrow_mut() = items;
+        let added: Vec<BoxedAnyObject> = slots.into_iter().skip(keep).map(BoxedAnyObject::new).collect();
+        self.store.splice(keep as u32, (old_len - keep) as u32, &added);
 
         let target = prev_id
             .and_then(|id| self.items.borrow().iter().position(|i| matches!(i, Item::Row(r) if r.row.id == id)))
@@ -642,7 +694,7 @@ impl ResultView {
         }
     }
 
-    fn build_calc_card(&self, c: &crate::calculator::CalcResult, n: usize) -> gtk4::Box {
+    fn build_calc_card(c: &crate::calculator::CalcResult, n: usize) -> gtk4::Box {
         let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         b.add_css_class("result-row");
         b.add_css_class("calc-card");
@@ -681,9 +733,9 @@ impl ResultView {
         b
     }
 
-    fn build_row(&self, r: &RowData, n: usize) -> gtk4::Box {
+    fn build_row(thumbs: &Thumbs, r: &RowData, n: usize) -> gtk4::Box {
         if let Some(c) = &r.calc {
-            return self.build_calc_card(c, n);
+            return Self::build_calc_card(c, n);
         }
         let row = &r.row;
         let b = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
@@ -712,7 +764,7 @@ impl ResultView {
             }
             RowKind::File if r.payload.as_ref().map_or(false, |p| has_thumbnail_support(&p.url)) => {
                 let url = &r.payload.as_ref().unwrap().url;
-                tile.append(&self.thumbnail_icon(url, 44));
+                tile.append(&thumbs.thumbnail_icon(url, 44));
             }
             RowKind::File => {
                 let img = match &r.payload {
@@ -812,47 +864,11 @@ impl ResultView {
         b
     }
 
-    fn update_active_selection(&self, selected_row: &gtk4::ListBoxRow) {
-        let mut child = self.list_box.first_child();
-        while let Some(c) = child {
-            c.remove_css_class("active-selection");
-            if let Some(r) = c.downcast_ref::<gtk4::ListBoxRow>() {
-                if let Some(inner) = r.child() {
-                    inner.remove_css_class("active-selection");
-                }
-            }
-            child = c.next_sibling();
-        }
-        selected_row.add_css_class("active-selection");
-        if let Some(inner) = selected_row.child() {
-            inner.add_css_class("active-selection");
-        }
-    }
-
     fn select_index(&self, idx: usize) {
-        if let Some(row) = self.list_box.row_at_index(idx as i32) {
-            self.list_box.select_row(Some(&row));
-            self.update_active_selection(&row);
-            self.ensure_visible(&row, idx);
-        }
-    }
-
-    fn ensure_visible(&self, row: &gtk4::ListBoxRow, idx: usize) {
-        let adj = self.scroll.vadjustment();
+        self.selection.set_selected(idx as u32);
         // First row of a section: keep its header in view.
         let first_in_section = idx > 0 && matches!(self.items.borrow().get(idx - 1), Some(Item::Header(_)));
-        let alloc = row.allocation();
-        let mut top = alloc.y() as f64;
-        let bottom = top + alloc.height() as f64;
-        if first_in_section {
-            top = (top - 30.0).max(0.0);
-        }
-        let (value, page) = (adj.value(), adj.page_size());
-        if top < value {
-            adj.set_value(top);
-        } else if bottom > value + page {
-            adj.set_value(bottom - page);
-        }
+        self.list.scroll_to((idx - usize::from(first_in_section)) as u32, gtk4::ListScrollFlags::NONE, None);
     }
 
     fn row_positions(&self) -> Vec<usize> {
@@ -871,7 +887,7 @@ impl ResultView {
         if pos.is_empty() {
             return false;
         }
-        let cur = self.selected.get().and_then(|s| pos.iter().position(|p| *p == s)).unwrap_or(0) as i32;
+        let cur = self.selected().and_then(|s| pos.iter().position(|p| *p == s)).unwrap_or(0) as i32;
         let next = (cur + delta).clamp(0, pos.len() as i32 - 1) as usize;
         if next as i32 == cur {
             return false;
@@ -893,7 +909,7 @@ impl ResultView {
         if starts.is_empty() {
             return;
         }
-        let cur = self.selected.get().unwrap_or(0);
+        let cur = self.selected().unwrap_or(0);
         let target = if forward {
             starts.iter().find(|s| **s > cur).copied()
         } else {
@@ -914,8 +930,7 @@ impl ResultView {
         }
     }
 
-    fn start_thumbnail_poll(&self, result_rx: mpsc::Receiver<(String, Option<ThumbPixels>)>) {
-        let pictures = self.thumb_pictures.clone();
+    fn start_thumbnail_poll(&self, pictures: Pictures, result_rx: mpsc::Receiver<(String, Option<ThumbPixels>)>) {
         let source_id = glib::timeout_add_local(Duration::from_millis(5), move || match result_rx.try_recv() {
             Ok((cache_key, pixels)) => {
                 let cache = THUMBNAIL_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
@@ -933,7 +948,7 @@ impl ResultView {
                         let texture = gdk::Texture::for_pixbuf(&pb);
                         cache.lock().unwrap().insert(cache_key.clone(), Some(texture.clone()));
                         if let Some(stacks) = pictures.borrow().get(&cache_key) {
-                            for stack in stacks {
+                            for stack in stacks.iter().filter_map(|w| w.upgrade()) {
                                 stack.set_visible_child_name("thumb");
                                 if let Some(widget) = stack.child_by_name("thumb") {
                                     if let Ok(pic) = widget.downcast::<gtk4::Picture>() {
@@ -955,6 +970,9 @@ impl ResultView {
         *self.thumb_poll.borrow_mut() = Some(source_id);
     }
 
+}
+
+impl Thumbs {
     // Sized cell: spinner until the thumbnail is ready, then the decoded texture.
     fn thumbnail_icon(&self, url: &str, pixel_size: i32) -> gtk4::Stack {
         let path = url.trim_start_matches("file://").to_string();
@@ -986,10 +1004,13 @@ impl ResultView {
         }
 
         stack.set_visible_child_name("loading");
-        self.thumb_pictures.borrow_mut().entry(cache_key.clone()).or_default().push(stack.clone());
-        if let Some(job_tx) = self.thumb_job_tx.borrow().as_ref() {
-            let _ = job_tx.send(ThumbJob { url: url.to_string(), cache_key, size: pixel_size, disk_png });
+        {
+            let mut pictures = self.pictures.borrow_mut();
+            let waiting = pictures.entry(cache_key.clone()).or_default();
+            waiting.retain(|w| w.upgrade().is_some());
+            waiting.push(stack.downgrade());
         }
+        let _ = self.tx.send(ThumbJob { url: url.to_string(), cache_key, size: pixel_size, disk_png });
         stack
     }
 }
