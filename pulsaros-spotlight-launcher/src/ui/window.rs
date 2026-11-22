@@ -3,11 +3,15 @@ use crate::calculator::{CalcHistory, CalcResult, Calculator};
 use crate::category::Category;
 use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
+use crate::core::apps_provider::AppsProvider;
 use crate::core::commands::{self, Command};
+use crate::core::commands_provider::CommandsProvider;
 use crate::core::frecency::Frecency;
 use crate::core::nav::{Browse, Nav, NavEvent, Opened};
 use crate::core::layout::{self, Action as LayoutAction, BarMode, Context as LayoutCtx, Event as LayoutEvent, LayoutState};
-use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch, SearchIndex};
+use crate::core::provider::{Provider, Query, Registry};
+use crate::core::root_run::RootRun;
+use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch, SearchIndex, Section};
 use crate::core::settings::Settings;
 use crate::core::shortcuts::{self, Act, Mods};
 use crate::core::store::Store;
@@ -904,7 +908,7 @@ impl SpotlightWindow {
         self.render(true);
     }
 
-    fn core_sections(&self, query: &str, extra: &[Row]) -> SectionList {
+    fn core_sections(&self, query: &str, extra: &[Row]) -> Vec<Section> {
         let commands = self.commands.borrow();
         let data = self
             .search_data
@@ -928,9 +932,6 @@ impl SpotlightWindow {
             extra,
         };
         RootSearch::sections_indexed(query, &ctx, &data.1)
-            .into_iter()
-            .map(|s| (s.title, s.rows.into_iter().map(|row| RowData { row, payload: None, calc: None }).collect()))
-            .collect()
     }
 
     fn do_search(self: &Rc<Self>, keep: bool) {
@@ -1009,7 +1010,18 @@ impl SpotlightWindow {
                 extra.extend(found.iter().map(|r| r.row.clone()));
                 let payloads: HashMap<String, Payload> =
                     found.into_iter().filter_map(|r| r.payload.map(|p| (r.row.id, p))).collect();
-                let mut secs = self.core_sections(&query, &extra);
+                let run = {
+                    let (this, q) = (self.clone(), query.clone());
+                    Rc::new(RootRun::new(move || this.core_sections(&q, &extra)))
+                };
+                let mut secs: SectionList = run
+                    .sections()
+                    .iter()
+                    .map(|s| {
+                        let rows = s.rows.iter().map(|row| RowData { row: row.clone(), payload: None, calc: None });
+                        (s.title.clone(), rows.collect())
+                    })
+                    .collect();
                 if category == Category::All && !is_empty {
                     self.add_extra_rows(&query, &mut secs);
                 }
@@ -1024,15 +1036,18 @@ impl SpotlightWindow {
                 if calc.is_some() {
                     secs.retain(|(t, _)| t != "Search the web");
                 }
-                if category == Category::Actions {
+                if category != Category::All {
+                    let provider: Box<dyn Provider> = if category == Category::Actions {
+                        Box::new(CommandsProvider::new(run.clone()))
+                    } else {
+                        Box::new(AppsProvider::new(run.clone()))
+                    };
+                    let mut registry = Registry::default();
+                    registry.register(provider);
+                    let ids: std::collections::HashSet<String> =
+                        registry.instant(&Query::new(&query)).into_iter().map(|r| r.id).collect();
                     for (_, rows) in secs.iter_mut() {
-                        rows.retain(|r| r.row.kind == RowKind::Command);
-                    }
-                    secs.retain(|(t, rows)| !rows.is_empty() && t != "Favorites" && t != "Suggestions");
-                }
-                if category == Category::Applications {
-                    for (_, rows) in secs.iter_mut() {
-                        rows.retain(|r| r.row.kind == RowKind::App);
+                        rows.retain(|r| ids.contains(&r.row.id));
                     }
                     secs.retain(|(t, rows)| !rows.is_empty() && t != "Favorites" && t != "Suggestions");
                 }

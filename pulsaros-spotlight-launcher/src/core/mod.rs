@@ -35,7 +35,9 @@
 //!   `to_row`/`rows(..)` give `Row`s with id `window:<id>` and actions `window_activate`/`window_close`.
 #![allow(dead_code)]
 
+pub mod apps_provider;
 pub mod commands;
+pub mod commands_provider;
 pub mod debounce;
 pub mod emoji;
 pub mod dmenu;
@@ -45,6 +47,7 @@ pub mod nav;
 pub mod provider;
 pub mod quicklinks;
 pub mod ranker;
+pub mod root_run;
 pub mod root_search;
 pub mod script_commands;
 pub mod settings;
