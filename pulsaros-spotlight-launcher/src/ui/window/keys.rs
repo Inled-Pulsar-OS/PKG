@@ -50,12 +50,10 @@ impl SpotlightWindow {
         // Enter on result: immediately run action index 0
         if (keyval == gdk::Key::Return || keyval == gdk::Key::KP_Enter || keyval == gdk::Key::ISO_Enter)
             && !mods.ctrl && !mods.alt && !mods.shift
-        {
-            if self.result_view.selected_row().is_some() {
+            && self.result_view.selected_row().is_some() {
                 self.run_action_index(0);
                 return glib::Propagation::Stop;
             }
-        }
 
         // Down / Up arrows
         if keyval == gdk::Key::Down && !mods.ctrl && !mods.alt && !mods.shift {

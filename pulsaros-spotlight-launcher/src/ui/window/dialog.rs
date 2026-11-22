@@ -11,6 +11,56 @@ pub(super) struct Dialog {
     pub(super) backdrop: gtk4::Box,
 }
 
+impl Dialog {
+    /// The confirm/prompt dialog card and its backdrop, hidden until shown.
+    /// Also returns the Cancel button and the backdrop click gesture for the caller to wire.
+    pub(super) fn build(form: &gtk4::Box) -> (Dialog, gtk4::Button, gtk4::GestureClick) {
+            let dialog_root = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+            dialog_root.add_css_class("dialog-card");
+            dialog_root.set_halign(gtk4::Align::Center);
+            dialog_root.set_valign(gtk4::Align::Center);
+            dialog_root.set_visible(false);
+            let dialog_title = gtk4::Label::builder().xalign(0.0).wrap(true).build();
+            dialog_title.add_css_class("dialog-title");
+            let dialog_body = gtk4::Label::builder().xalign(0.0).wrap(true).build();
+            dialog_body.add_css_class("dialog-body");
+            let dialog_entry = gtk4::Entry::new();
+            let dialog_buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+            dialog_buttons.set_halign(gtk4::Align::End);
+            let dialog_cancel = gtk4::Button::with_label("Cancel");
+            dialog_cancel.add_css_class("dialog-cancel-btn");
+            let dialog_ok = gtk4::Button::with_label("OK");
+            dialog_ok.add_css_class("dialog-ok-btn");
+            dialog_ok.add_css_class("suggested-action");
+            dialog_buttons.append(&dialog_cancel);
+            dialog_buttons.append(&dialog_ok);
+            dialog_root.append(&dialog_title);
+            dialog_root.append(&dialog_body);
+            dialog_root.append(form);
+            dialog_root.append(&dialog_entry);
+            dialog_root.append(&dialog_buttons);
+
+            let dialog_backdrop = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+            dialog_backdrop.add_css_class("dialog-backdrop");
+            dialog_backdrop.set_hexpand(true);
+            dialog_backdrop.set_vexpand(true);
+            dialog_backdrop.set_visible(false);
+
+            let click_backdrop = gtk4::GestureClick::new();
+            dialog_backdrop.add_controller(click_backdrop.clone());
+        let dialog = Dialog {
+            root: dialog_root,
+            title: dialog_title,
+            body: dialog_body,
+            entry: dialog_entry,
+            ok: dialog_ok,
+            on_ok: RefCell::new(None),
+            backdrop: dialog_backdrop,
+        };
+        (dialog, dialog_cancel, click_backdrop)
+    }
+}
+
 impl SpotlightWindow {
     pub(super) fn show_dialog(
         self: &Rc<Self>,

@@ -1,6 +1,5 @@
 //! Blocking D-Bus client for the Shell extension's window switcher
 //! (`es.inled.PulsarosSpotlight.Windows`). Degrades to an empty list when the extension is absent.
-#![allow(dead_code)]
 use zbus::blocking::{Connection, Proxy};
 
 use crate::core::windows::WindowEntry;

@@ -18,10 +18,6 @@ impl FilesProvider {
 }
 
 impl Provider for FilesProvider {
-    fn id(&self) -> &str {
-        "files"
-    }
-
     fn instant(&self, _query: &Query) -> Vec<Row> {
         Vec::new()
     }
@@ -58,10 +54,6 @@ fn link(id: &str, title: &str, subtitle: &str) -> Row {
 }
 
 impl Provider for WebProvider {
-    fn id(&self) -> &str {
-        "web"
-    }
-
     fn instant(&self, query: &Query) -> Vec<Row> {
         if self.category != Category::Web {
             return Vec::new();
@@ -90,10 +82,6 @@ impl HistoryProvider {
 }
 
 impl Provider for HistoryProvider {
-    fn id(&self) -> &str {
-        "history"
-    }
-
     fn instant(&self, _query: &Query) -> Vec<Row> {
         Vec::new()
     }

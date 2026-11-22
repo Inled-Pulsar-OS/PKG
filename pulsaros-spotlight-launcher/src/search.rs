@@ -195,7 +195,7 @@ pub fn matches_category(filename: &str, category: Category) -> bool {
         return true;
     }
     let lower = filename.to_lowercase();
-    let ext = lower.split('.').last().unwrap_or("");
+    let ext = lower.split('.').next_back().unwrap_or("");
     match category {
         Category::Documents => matches!(
             ext,
@@ -275,7 +275,7 @@ pub(crate) fn search_nautilus(ctx: &mut WorkerCtx, query: &str, category: Catego
         }
 
         let clean_url = url.trim_end_matches('/');
-        let filename_part = clean_url.split('/').last().unwrap_or(clean_url);
+        let filename_part = clean_url.split('/').next_back().unwrap_or(clean_url);
         let title = match urlencoding::decode(filename_part) {
             Ok(decoded) if !decoded.trim().is_empty() => decoded.into_owned(),
             _ => filename_part.to_string(),
@@ -290,8 +290,7 @@ pub(crate) fn search_nautilus(ctx: &mut WorkerCtx, query: &str, category: Catego
             .unwrap_or("application/octet-stream")
             .to_string();
 
-        let path_display = if clean_url.starts_with("file://") {
-            let p = &clean_url[7..];
+        let path_display = if let Some(p) = clean_url.strip_prefix("file://") {
             urlencoding::decode(p).unwrap_or(std::borrow::Cow::Borrowed(p)).to_string()
         } else {
             clean_url.to_string()

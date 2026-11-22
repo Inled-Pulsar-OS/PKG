@@ -18,5 +18,4 @@ fn keeps_only_command_rows_in_section_order() {
     let p = CommandsProvider::new(run);
     let ids: Vec<String> = p.instant(&Query::new("x")).into_iter().map(|r| r.id).collect();
     assert_eq!(ids, ["gnome:b", "gnome:c"]);
-    assert_eq!(p.id(), "commands");
 }

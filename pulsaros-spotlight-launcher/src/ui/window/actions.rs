@@ -53,7 +53,7 @@ impl SpotlightWindow {
             }
             RowKind::File => {
                 out.push(mk("copy_path", "Copy Path", shortcuts::label(Act::Run(1)), false, None));
-                if rd.payload.as_ref().map_or(false, |p| p.url.starts_with("file://")) {
+                if rd.payload.as_ref().is_some_and(|p| p.url.starts_with("file://")) {
                     out.push(mk("open_folder", "Open Containing Folder", shortcuts::label(Act::Run(2)), false, None));
                 }
             }
@@ -392,7 +392,7 @@ impl SpotlightWindow {
             cmd.args(["--uninstall", &desktop_id]);
             cmd.env("APPINSTALL_SUDO", "pkexec");
             let output = cmd.output();
-            let success = output.as_ref().map_or(false, |o| o.status.success());
+            let success = output.as_ref().is_ok_and(|o| o.status.success());
             let message = output.map_or_else(
                 |e| e.to_string(),
                 |o| String::from_utf8_lossy(&[o.stdout, o.stderr].concat()).into_owned(),

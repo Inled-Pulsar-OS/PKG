@@ -33,7 +33,6 @@
 //!   `Outcome::{Selected(s),Cancelled}` with `exit_code()` (0/1) and `stdout()`.
 //! - `windows`: `WindowEntry{id,title,wm_class,app_id,workspace}`, `rank(q,&wins,&frecency,now)`,
 //!   `to_row`/`rows(..)` give `Row`s with id `window:<id>` and actions `window_activate`/`window_close`.
-#![allow(dead_code)]
 
 pub mod apps_provider;
 pub mod calc_provider;

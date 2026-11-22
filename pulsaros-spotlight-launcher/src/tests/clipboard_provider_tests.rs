@@ -12,7 +12,6 @@ fn ids(p: &ClipboardProvider, q: &str) -> Vec<String> {
 #[test]
 fn matches_query_and_keeps_history_index() {
     assert_eq!(ids(&provider(9), "ALPHA"), ["clipboard://0", "clipboard://2"]);
-    assert_eq!(provider(9).id(), "clipboard");
 }
 
 #[test]

@@ -67,8 +67,7 @@ static EXT_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(||
 });
 
 pub fn open_file(url: &str) -> bool {
-    if url.starts_with("app://") {
-        let desktop_filename = &url[6..];
+    if let Some(desktop_filename) = url.strip_prefix("app://") {
         if let Some(app_info) = gio::DesktopAppInfo::new(desktop_filename) {
             return app_info.launch(&[], None::<&gio::AppLaunchContext>).is_ok();
         }
@@ -136,40 +135,3 @@ pub fn get_file_icon(url: &str, mime: Option<&str>, is_dir: bool) -> gtk4::Image
     gtk4::Image::from_gicon(&themed)
 }
 
-#[allow(dead_code)]
-pub fn icon_for_mime(mime: &str) -> &'static str {
-    if mime.is_empty() {
-        return "text-x-generic-symbolic";
-    }
-    if mime == "text/plain-clipboard" {
-        return "edit-paste-symbolic";
-    }
-    if mime.starts_with("image/") {
-        return "image-x-generic-symbolic";
-    }
-    if mime.starts_with("audio/") {
-        return "audio-x-generic-symbolic";
-    }
-    if mime.starts_with("video/") {
-        return "video-x-generic-symbolic";
-    }
-    if mime == "application/pdf" {
-        return "application-pdf-symbolic";
-    }
-    if mime.starts_with("text/") {
-        return "text-x-generic-symbolic";
-    }
-    if mime.contains("document") || mime.contains("wordprocessing") {
-        return "x-office-document-symbolic";
-    }
-    if mime.contains("spreadsheet") {
-        return "x-office-spreadsheet-symbolic";
-    }
-    if mime.contains("presentation") {
-        return "x-office-presentation-symbolic";
-    }
-    if mime.contains("archive") || mime.contains("compressed") || mime.contains("zip") || mime.contains("tar") {
-        return "package-x-generic-symbolic";
-    }
-    "text-x-generic-symbolic"
-}

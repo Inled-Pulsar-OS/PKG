@@ -163,10 +163,6 @@ fn disabled_hidden_everywhere_and_listed() {
     assert!(!w.ids("firefox", "Results").contains(&"app:firefox".to_string()));
     assert!(!w.ids("", "Applications").contains(&"app:firefox".to_string()));
     assert!(w.ids("", "Favorites").is_empty());
-    let ctx = Ctx { apps: &w.apps, commands: &w.cmds, states: &w.states, settings: &w.settings, frecency: &w.fre, now: 0, extra: &[] };
-    let d = RootSearch::disabled_rows(&ctx);
-    assert_eq!(d.len(), 1);
-    assert_eq!(d[0].actions[0].id, "enable");
     w.settings.enable("app:firefox");
     assert!(w.ids("firefox", "Results").contains(&"app:firefox".to_string()));
 }

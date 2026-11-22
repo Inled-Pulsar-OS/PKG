@@ -23,7 +23,6 @@ fn keeps_only_app_rows() {
     let p = AppsProvider::new(run(Rc::default()));
     let ids: Vec<String> = p.instant(&Query::new("a")).into_iter().map(|r| r.id).collect();
     assert_eq!(ids, ["app:a"]);
-    assert_eq!(p.id(), "apps");
 }
 
 #[test]

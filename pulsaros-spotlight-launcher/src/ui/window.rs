@@ -37,6 +37,9 @@ mod dialog;
 mod emoji;
 mod keys;
 mod panel;
+mod pointer;
+#[cfg(test)]
+use pointer::parse_cursor_pos;
 mod scripts;
 mod search;
 mod snippets;
@@ -197,7 +200,7 @@ impl SpotlightWindow {
         style_manager.connect_notify_local(Some("dark"), move |sm, _| apply_scheme(sm.is_dark()));
 
         let zoom_provider = gtk4::CssProvider::new();
-        zoom_provider.load_from_data(&zoom_css(zoom));
+        zoom_provider.load_from_string(&zoom_css(zoom));
         if let Some(display) = gdk::Display::default() {
             gtk4::style_context_add_provider_for_display(&display, &zoom_provider, 1001);
         }
@@ -348,60 +351,9 @@ impl SpotlightWindow {
         progress_box.append(&progress_label);
         progress_revealer.set_child(Some(&progress_box));
 
-        // -- Action panel --
-        let panel_root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        panel_root.add_css_class("action-panel");
-        panel_root.set_halign(gtk4::Align::End);
-        panel_root.set_valign(gtk4::Align::End);
-        panel_root.set_visible(false);
-        let panel_list = gtk4::ListBox::builder().selection_mode(gtk4::SelectionMode::Single).build();
-        panel_list.add_css_class("action-list");
-        let filter_wrap = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-        filter_wrap.add_css_class("action-filter-wrap");
-        let panel_entry = gtk4::Entry::builder()
-            .placeholder_text("Search for actions\u{2026}")
-            .hexpand(true)
-            .has_frame(false)
-            .build();
-        panel_entry.add_css_class("action-filter");
-        filter_wrap.append(&panel_entry);
-        panel_root.append(&panel_list);
-        panel_root.append(&filter_wrap);
-
-        // -- Dialog card (confirm / alias editor) --
-        let dialog_root = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
-        dialog_root.add_css_class("dialog-card");
-        dialog_root.set_halign(gtk4::Align::Center);
-        dialog_root.set_valign(gtk4::Align::Center);
-        dialog_root.set_visible(false);
-        let dialog_title = gtk4::Label::builder().xalign(0.0).wrap(true).build();
-        dialog_title.add_css_class("dialog-title");
-        let dialog_body = gtk4::Label::builder().xalign(0.0).wrap(true).build();
-        dialog_body.add_css_class("dialog-body");
-        let dialog_entry = gtk4::Entry::new();
-        let dialog_buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-        dialog_buttons.set_halign(gtk4::Align::End);
-        let dialog_cancel = gtk4::Button::with_label("Cancel");
-        dialog_cancel.add_css_class("dialog-cancel-btn");
-        let dialog_ok = gtk4::Button::with_label("OK");
-        dialog_ok.add_css_class("dialog-ok-btn");
-        dialog_ok.add_css_class("suggested-action");
-        dialog_buttons.append(&dialog_cancel);
-        dialog_buttons.append(&dialog_ok);
-        dialog_root.append(&dialog_title);
-        dialog_root.append(&dialog_body);
-        dialog_root.append(&x.form);
-        dialog_root.append(&dialog_entry);
-        dialog_root.append(&dialog_buttons);
-
-        let dialog_backdrop = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        dialog_backdrop.add_css_class("dialog-backdrop");
-        dialog_backdrop.set_hexpand(true);
-        dialog_backdrop.set_vexpand(true);
-        dialog_backdrop.set_visible(false);
-
-        let click_backdrop = gtk4::GestureClick::new();
-        dialog_backdrop.add_controller(click_backdrop.clone());
+        let panel = Panel::build();
+        let (dialog, dialog_cancel, click_backdrop) = Dialog::build(&x.form);
+        let dialog_ok = dialog.ok.clone();
 
         // -- Result view --
         let result_view_cell: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
@@ -436,9 +388,9 @@ impl SpotlightWindow {
         overlay.set_vexpand(true);
         overlay.set_child(Some(&x.stack));
         overlay.add_overlay(&toast_pill);
-        overlay.add_overlay(&panel_root);
-        overlay.add_overlay(&dialog_backdrop);
-        overlay.add_overlay(&dialog_root);
+        overlay.add_overlay(&panel.root);
+        overlay.add_overlay(&dialog.backdrop);
+        overlay.add_overlay(&dialog.root);
         main_box.append(&overlay);
         main_box.append(&progress_revealer);
 
@@ -477,23 +429,8 @@ impl SpotlightWindow {
             commands: RefCell::new(Vec::new()),
             x,
             current: RefCell::new(Vec::new()),
-            panel: Panel {
-                root: panel_root,
-                list: panel_list,
-                entry: panel_entry,
-                all: RefCell::new(Vec::new()),
-                shown: RefCell::new(Vec::new()),
-                target: RefCell::new(None),
-            },
-            dialog: Dialog {
-                root: dialog_root,
-                title: dialog_title,
-                body: dialog_body,
-                entry: dialog_entry,
-                ok: dialog_ok.clone(),
-                on_ok: RefCell::new(None),
-                backdrop: dialog_backdrop,
-            },
+            panel,
+            dialog,
             more_popover,
             category_buttons: RefCell::new(cat_buttons),
             loading: Loading { bar: loading_bar, count: Cell::new(0), timer: RefCell::new(None) },
@@ -571,63 +508,10 @@ impl SpotlightWindow {
         spotlight
     }
 
-    /// Same two checks the focus-loss handler has always used: the `--keep-open` debug
-    /// escape hatch and the `hide_on_focus_loss` config toggle. Any path that wants to hide
-    /// the window because of an "outside" interaction (focus-loss today, click-outside via
-    /// the Shell extension) must gate on this first, so the two paths can never drift apart.
-    fn may_hide_on_outside_event(&self) -> bool {
-        let keep_open = std::env::args().any(|a| a == "--keep-open");
-        !keep_open && self.config.borrow().hide_on_focus_loss
-    }
 
-    /// The one place that actually hides the window and cleans up. Called by both the
-    /// focus-loss handler and the click-outside D-Bus request from the Shell extension.
-    fn hide_window(self: &Rc<Self>) {
-        self.window.set_visible(false);
-    }
 
-    /// Entry point for the Shell extension's "click landed outside the window" report
-    /// (see `src/control_service.rs`). Routes through the exact same gating and hide logic
-    /// as the existing focus-loss path — no separate hide implementation.
-    pub fn handle_outside_click(self: &Rc<Self>) {
-        if self.window.is_visible() && self.may_hide_on_outside_event() {
-            self.hide_window();
-        }
-    }
 
-    /// Pointer motion anywhere on the screen, reported by the Shell extension (global
-    /// coordinates). Reveals the mode buttons from any pointer travel, not only over the bar.
-    pub fn handle_global_pointer(&self, x: f64, y: f64) {
-        if self.window.is_visible() {
-            self.bar.global_pointer.set(true);
-            self.on_pointer(x, y);
-        }
-    }
 
-    /// Hyprland has no extension that reports the pointer, so ask its IPC socket for the cursor
-    /// position every 30 ms while the window is visible and still in the Idle bar state. The
-    /// timer stops itself when the window hides. GNOME gets the position from the Shell
-    /// extension instead (`handle_global_pointer`), so this only runs under Hyprland.
-    fn start_hypr_pointer_poll(self: &Rc<Self>) {
-        let Some(path) = hypr_socket_path() else { return };
-        if self.bar.hypr_poll.borrow().is_some() {
-            return;
-        }
-        let s = self.clone();
-        let id = glib::timeout_add_local(Duration::from_millis(30), move || {
-            if !s.window.is_visible() {
-                s.bar.hypr_poll.borrow_mut().take();
-                return glib::ControlFlow::Break;
-            }
-            if s.layout.get() == LayoutState::Idle {
-                if let Some((x, y)) = hypr_cursor_pos(&path) {
-                    s.handle_global_pointer(x, y);
-                }
-            }
-            glib::ControlFlow::Continue
-        });
-        *self.bar.hypr_poll.borrow_mut() = Some(id);
-    }
 
     pub fn present_with_focus(self: &Rc<Self>) {
         // Follow the Liquid Glass switch from Pulsar Settings.
@@ -995,7 +879,7 @@ fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<RowData> {
                 continue;
             }
 
-            let is_dir = entry.file_type().map_or(false, |t| t.is_dir());
+            let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
             let mime = if is_dir { "inode/directory".to_string() } else { "application/octet-stream".to_string() };
 
             results.push(result_row(
@@ -1015,25 +899,3 @@ fn browse_directory_plain(path_str: &str, filter: &str) -> Vec<RowData> {
 #[path = "../tests/window_tests.rs"]
 mod tests;
 
-/// Path of Hyprland's command socket, when running under Hyprland.
-fn hypr_socket_path() -> Option<std::path::PathBuf> {
-    let sig = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
-    let run = std::env::var_os("XDG_RUNTIME_DIR")?;
-    Some(std::path::PathBuf::from(run).join("hypr").join(sig).join(".socket.sock"))
-}
-
-/// Cursor position from Hyprland (`cursorpos` replies "x, y").
-fn hypr_cursor_pos(socket: &Path) -> Option<(f64, f64)> {
-    use std::io::{Read, Write};
-    let mut stream = std::os::unix::net::UnixStream::connect(socket).ok()?;
-    stream.set_read_timeout(Some(Duration::from_millis(50))).ok()?;
-    stream.write_all(b"cursorpos").ok()?;
-    let mut reply = String::new();
-    stream.read_to_string(&mut reply).ok()?;
-    parse_cursor_pos(&reply)
-}
-
-fn parse_cursor_pos(reply: &str) -> Option<(f64, f64)> {
-    let (x, y) = reply.trim().split_once(',')?;
-    Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
-}

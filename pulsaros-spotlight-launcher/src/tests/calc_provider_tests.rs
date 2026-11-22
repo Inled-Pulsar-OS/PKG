@@ -12,7 +12,6 @@ fn ids(p: &dyn Provider, q: &str) -> Vec<String> {
 fn calculator_answers_an_expression() {
     let rows = CalculatorProvider.instant(&Query::new("2+2"));
     assert_eq!((rows[0].id.as_str(), rows[0].title.as_str(), rows[0].kind), ("calc:4", "4", RowKind::Calc));
-    assert_eq!(CalculatorProvider.id(), "calculator");
 }
 
 #[test]
@@ -36,6 +35,5 @@ fn history_lists_matches_newest_first() {
     let p = CalcHistoryProvider::new(h);
     assert_eq!(ids(&p, ""), [format!("calchist:{second}"), format!("calchist:{first}")]);
     assert_eq!(ids(&p, "2+2"), [format!("calchist:{second}")]);
-    assert_eq!(p.id(), "calc-history");
     let _ = std::fs::remove_file(path);
 }

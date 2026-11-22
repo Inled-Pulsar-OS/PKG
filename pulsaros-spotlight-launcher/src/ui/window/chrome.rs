@@ -105,7 +105,7 @@ pub(super) fn zoom_css(z: f64) -> String {
 impl SpotlightWindow {
     pub(super) fn set_zoom(&self, z: f64) {
         let z = ((z * 10.0).round() / 10.0).clamp(ZOOM_MIN, ZOOM_MAX);
-        self.zoom_provider.load_from_data(&zoom_css(z));
+        self.zoom_provider.load_from_string(&zoom_css(z));
         self.apply_size(z);
         let mut c = self.config.borrow_mut();
         c.zoom = z;

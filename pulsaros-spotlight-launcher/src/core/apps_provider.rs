@@ -16,10 +16,6 @@ impl AppsProvider {
 }
 
 impl Provider for AppsProvider {
-    fn id(&self) -> &str {
-        "apps"
-    }
-
     fn instant(&self, _query: &Query) -> Vec<Row> {
         self.run.rows_of(RowKind::App)
     }

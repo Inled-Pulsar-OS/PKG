@@ -45,6 +45,4 @@ fn outcomes() {
     let s = Outcome::Selected("b".into());
     assert_eq!((s.exit_code(), s.stdout()), (0, Some("b\n".into())));
     assert_eq!((Outcome::Cancelled.exit_code(), Outcome::Cancelled.stdout()), (1, None));
-    assert_eq!(run_headless_check(&[]), Some(Outcome::Cancelled));
-    assert_eq!(run_headless_check(&v(&["a"])), None);
 }

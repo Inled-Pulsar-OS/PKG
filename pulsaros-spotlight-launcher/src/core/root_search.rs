@@ -171,6 +171,7 @@ impl RootSearch {
     }
 
     /// Builds a throwaway index; callers that search per keystroke use `sections_indexed`.
+    #[cfg(test)]
     pub fn sections(query: &str, ctx: &Ctx) -> Vec<Section> {
         Self::sections_indexed(query, ctx, &SearchIndex::new(ctx.apps, ctx.commands))
     }
@@ -250,26 +251,6 @@ impl RootSearch {
                 })
                 .collect(),
         });
-    }
-
-    /// Rows for a "Disabled commands" view: pick one to `Settings::enable` it.
-    pub fn disabled_rows(ctx: &Ctx) -> Vec<Row> {
-        ctx.settings
-            .disabled()
-            .iter()
-            .filter_map(|id| {
-                if let Some(a) = ctx.apps.iter().find(|a| &a.id == id) {
-                    let mut r = app_row(a, ctx.settings);
-                    r.actions = vec![ActionDesc { id: "enable".into(), title: "Enable".into(), argv: None }];
-                    return Some(r);
-                }
-                ctx.commands.iter().find(|c| &c.id == id).map(|c| {
-                    let mut r = cmd_row(c, ctx);
-                    r.actions = vec![ActionDesc { id: "enable".into(), title: "Enable".into(), argv: None }];
-                    r
-                })
-            })
-            .collect()
     }
 }
 

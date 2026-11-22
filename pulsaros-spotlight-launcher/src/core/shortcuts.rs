@@ -1,7 +1,5 @@
 //! One shortcut table for the whole launcher. Keys are lowercase GDK key names
 //! (`Key::to_lower().name()`), so this module stays free of gtk types.
-use std::collections::HashSet;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Act {
     ActionPanel,
@@ -151,7 +149,9 @@ pub fn label(act: Act) -> Vec<String> {
 }
 
 /// Duplicate (key, mods) pairs; must stay empty.
+#[cfg(test)]
 pub fn conflicts() -> Vec<(&'static str, Mods)> {
+    use std::collections::HashSet;
     let mut seen = HashSet::new();
     TABLE.iter().filter(|x| !seen.insert((x.key, x.mods))).map(|x| (x.key, x.mods)).collect()
 }

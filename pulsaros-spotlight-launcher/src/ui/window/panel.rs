@@ -10,6 +10,38 @@ pub(super) struct Panel {
     pub(super) target: RefCell<Option<RowData>>,
 }
 
+impl Panel {
+    /// The Ctrl+K action panel widgets, hidden until opened.
+    pub(super) fn build() -> Panel {
+            let panel_root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+            panel_root.add_css_class("action-panel");
+            panel_root.set_halign(gtk4::Align::End);
+            panel_root.set_valign(gtk4::Align::End);
+            panel_root.set_visible(false);
+            let panel_list = gtk4::ListBox::builder().selection_mode(gtk4::SelectionMode::Single).build();
+            panel_list.add_css_class("action-list");
+            let filter_wrap = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+            filter_wrap.add_css_class("action-filter-wrap");
+            let panel_entry = gtk4::Entry::builder()
+                .placeholder_text("Search for actions\u{2026}")
+                .hexpand(true)
+                .has_frame(false)
+                .build();
+            panel_entry.add_css_class("action-filter");
+            filter_wrap.append(&panel_entry);
+            panel_root.append(&panel_list);
+            panel_root.append(&filter_wrap);
+        Panel {
+            root: panel_root,
+            list: panel_list,
+            entry: panel_entry,
+            all: RefCell::new(Vec::new()),
+            shown: RefCell::new(Vec::new()),
+            target: RefCell::new(None),
+        }
+    }
+}
+
 /// Title of the primary action for the panel and the selected-row hint.
 pub(crate) fn primary_title(r: &RowData) -> String {
     for (prefix, title) in [("dmenu:", "Select"), ("snippet:", "Paste Snippet"), ("window:", "Switch to Window"), ("script:", "Run Script")] {
@@ -76,7 +108,7 @@ impl SpotlightWindow {
                     let label = gtk4::Label::builder().label(&act.title).xalign(0.0).hexpand(true).build();
                     row_box.append(&label);
                     if !act.keys.is_empty() {
-                        let k = gtk4::Label::builder().label(&act.keys.join("+")).build();
+                        let k = gtk4::Label::builder().label(act.keys.join("+")).build();
                         k.add_css_class("keycap");
                         row_box.append(&k);
                     }

@@ -16,10 +16,6 @@ impl CommandsProvider {
 }
 
 impl Provider for CommandsProvider {
-    fn id(&self) -> &str {
-        "commands"
-    }
-
     fn instant(&self, _query: &Query) -> Vec<Row> {
         self.run.rows_of(RowKind::Command)
     }

@@ -38,10 +38,6 @@ impl ClipboardProvider {
 }
 
 impl Provider for ClipboardProvider {
-    fn id(&self) -> &str {
-        "clipboard"
-    }
-
     fn instant(&self, query: &Query) -> Vec<Row> {
         let mut rows = clipboard_rows(&(self.items)(), &query.text);
         rows.truncate(self.limit);

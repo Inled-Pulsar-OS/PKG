@@ -52,12 +52,13 @@ pub struct Context {
 pub enum Event {
     Pointer { x: f64, y: f64 },
     Tab,
-    Char,
     Down,
     Up,
     /// A button click or Alt+1..4.
     Mode(BarMode),
     Esc,
+    /// Specified in #206 but not wired to a key yet (only the tests send it).
+    #[allow(dead_code)]
     ShiftEsc,
     /// The query just became empty.
     QueryEmptied,
@@ -71,7 +72,6 @@ pub enum Action {
     Close,
     StepBack,
     CycleMode,
-    ShowResults,
     ShowHome,
     ShowHistory,
     SwitchMode(BarMode),
@@ -109,11 +109,10 @@ pub fn transition(state: LayoutState, ctx: &Context, event: Event) -> Outcome {
         Event::Pointer { .. } => out(state, Action::Nothing),
         Event::Tab if state == Idle => out(IdleModes, Action::Nothing),
         Event::Tab => out(state, Action::CycleMode),
-        Event::Char if bar => out(Panel, Action::ShowResults),
         Event::Down if bar => out(Panel, Action::ShowHome),
         Event::Up if bar => out(Panel, Action::ShowHistory),
         Event::Mode(m) if bar => out(Panel, Action::SwitchMode(m)),
-        Event::Char | Event::Down | Event::Up | Event::Mode(_) => out(state, Action::Default),
+        Event::Down | Event::Up | Event::Mode(_) => out(state, Action::Default),
         Event::Esc if bar || ctx.at_root => out(state, Action::Close),
         Event::Esc => out(state, Action::StepBack),
         Event::ShiftEsc if state == Panel && ctx.query_empty && ctx.mode_all => {

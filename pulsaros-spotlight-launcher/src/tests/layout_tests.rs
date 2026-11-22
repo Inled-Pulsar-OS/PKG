@@ -46,7 +46,6 @@ fn tab_reveals_then_cycles() {
 #[test]
 fn bar_events_open_the_panel() {
     for s in [Idle, IdleModes] {
-        assert_eq!(run(s, &ctx(), Event::Char), (Panel, A::ShowResults));
         assert_eq!(run(s, &ctx(), Event::Down), (Panel, A::ShowHome));
         assert_eq!(run(s, &ctx(), Event::Up), (Panel, A::ShowHistory));
         for m in [BarMode::Applications, BarMode::Files, BarMode::Actions, BarMode::Clipboard] {
@@ -57,7 +56,7 @@ fn bar_events_open_the_panel() {
 
 #[test]
 fn panel_keeps_default_handling() {
-    for e in [Event::Char, Event::Down, Event::Up, Event::Mode(BarMode::Files)] {
+    for e in [Event::Down, Event::Up, Event::Mode(BarMode::Files)] {
         assert_eq!(run(Panel, &ctx(), e), (Panel, A::Default));
     }
 }

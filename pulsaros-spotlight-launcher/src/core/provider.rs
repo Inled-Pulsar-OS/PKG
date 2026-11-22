@@ -33,8 +33,6 @@ pub struct Job {
 }
 
 pub trait Provider {
-    /// Stable name, used for logs and tests.
-    fn id(&self) -> &str;
     fn instant(&self, query: &Query) -> Vec<Row>;
     fn background(&self, _query: &Query) -> Option<Job> {
         None

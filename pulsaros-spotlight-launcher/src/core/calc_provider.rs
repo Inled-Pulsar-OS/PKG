@@ -25,10 +25,6 @@ pub fn history_result(h: &HistoryRow) -> CalcResult {
 pub struct CalculatorProvider;
 
 impl Provider for CalculatorProvider {
-    fn id(&self) -> &str {
-        "calculator"
-    }
-
     fn instant(&self, query: &Query) -> Vec<Row> {
         let mut rows: Vec<Row> =
             Calculator::calculate(&query.text).map(|c| calc_row(&c, &format!("calc:{}", c.answer))).into_iter().collect();
@@ -52,10 +48,6 @@ impl CalcHistoryProvider {
 }
 
 impl Provider for CalcHistoryProvider {
-    fn id(&self) -> &str {
-        "calc-history"
-    }
-
     fn instant(&self, query: &Query) -> Vec<Row> {
         let rows = self.history.borrow().search(&query.text);
         rows.iter().map(|h| calc_row(&history_result(h), &format!("calchist:{}", h.id))).collect()

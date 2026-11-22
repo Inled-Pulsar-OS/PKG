@@ -12,9 +12,6 @@ fn row(id: &str, title: &str) -> Row {
 }
 
 impl Provider for Fake {
-    fn id(&self) -> &str {
-        self.name
-    }
     fn instant(&self, q: &Query) -> Vec<Row> {
         self.ids.iter().map(|id| row(id, &format!("{}:{}", self.name, q.text))).collect()
     }

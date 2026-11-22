@@ -1,6 +1,4 @@
 use crate::config::SpotlightConfig;
-use crate::core::clipboard_provider::{clipboard_rows, MIME};
-use crate::ui::results::{Payload, RowData};
 use gtk4::gdk;
 use gtk4::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -231,17 +229,6 @@ impl ClipboardManager {
         inner.items.get(index).map(|item| item.text.clone())
     }
 
-    pub fn search_history(&self, query: &str) -> Vec<RowData> {
-        let texts: Vec<String> = self.get_items().into_iter().map(|i| i.text).collect();
-        clipboard_rows(&texts, query)
-            .into_iter()
-            .map(|row| {
-                let payload = Payload { url: row.id.clone(), mime: MIME.to_string(), app: None };
-                RowData { row, payload: Some(payload), calc: None }
-            })
-            .collect()
-    }
-
     pub fn paste_clip(&self, text: &str) {
         if text.is_empty() {
             return;
@@ -292,7 +279,7 @@ impl ClipboardManager {
             let uid = unsafe { libc::getuid() };
             let sock = format!("/run/user/{}/.ydotool_socket", uid);
             let mut cmd = Command::new(path);
-            cmd.args(&["key", "29:1", "47:1", "47:0", "29:0"]);
+            cmd.args(["key", "29:1", "47:1", "47:0", "29:0"]);
             if std::path::Path::new(&sock).exists() {
                 cmd.env("YDOTOOL_SOCKET", sock);
             }
@@ -319,7 +306,7 @@ impl ClipboardManager {
         // 3. Fallback: xdotool
         if let Some(path) = which("xdotool") {
             let _ = Command::new(path)
-                .args(&["key", "ctrl+v"])
+                .args(["key", "ctrl+v"])
                 .spawn();
         }
     }
