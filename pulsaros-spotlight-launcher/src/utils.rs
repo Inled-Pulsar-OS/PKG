@@ -2,10 +2,9 @@ use gtk4::gio;
 use gtk4::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
-lazy_static! {
-    static ref EXT_MAP: HashMap<&'static str, &'static str> = {
+static EXT_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
         let mut m = HashMap::new();
         m.insert("py", "file_python.svg");
         m.insert("pyw", "file_python.svg");
@@ -65,8 +64,7 @@ lazy_static! {
         m.insert("pkg", "file_package.svg");
         m.insert("deb", "file_package.svg");
         m
-    };
-}
+});
 
 pub fn open_file(url: &str) -> bool {
     if url.starts_with("app://") {

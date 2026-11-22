@@ -142,11 +142,6 @@ pub struct SpotlightWindow {
     /// Everything below the header row; hidden while the layout is Idle.
     panel_parts: Vec<gtk4::Widget>,
 
-    indexing_revealer: gtk4::Revealer,
-    indexing_label: gtk4::Label,
-    indexing_pbar: gtk4::ProgressBar,
-    indexing_timer_id: Rc<RefCell<Option<glib::SourceId>>>,
-
     progress_revealer: gtk4::Revealer,
     progress_spinner: gtk4::Spinner,
     progress_label: gtk4::Label,
@@ -491,31 +486,6 @@ impl SpotlightWindow {
         progress_box.append(&progress_label);
         progress_revealer.set_child(Some(&progress_box));
 
-        // -- Indexing banner --
-        let indexing_revealer = gtk4::Revealer::builder()
-            .transition_type(gtk4::RevealerTransitionType::SlideDown)
-            .transition_duration(200)
-            .reveal_child(false)
-            .build();
-        let indexing_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-        indexing_box.add_css_class("indexing-status-bar");
-        let indexing_spinner = gtk4::Spinner::new();
-        indexing_spinner.start();
-        let indexing_label = gtk4::Label::builder()
-            .label("Indexing files in background...")
-            .xalign(0.0)
-            .hexpand(true)
-            .build();
-        let indexing_pbar = gtk4::ProgressBar::builder()
-            .valign(gtk4::Align::Center)
-            .width_request(100)
-            .height_request(4)
-            .build();
-        indexing_box.append(&indexing_spinner);
-        indexing_box.append(&indexing_label);
-        indexing_box.append(&indexing_pbar);
-        indexing_revealer.set_child(Some(&indexing_box));
-
         // -- Action panel --
         let panel_root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         panel_root.add_css_class("action-panel");
@@ -609,14 +579,12 @@ impl SpotlightWindow {
         overlay.add_overlay(&dialog_root);
         main_box.append(&overlay);
         main_box.append(&progress_revealer);
-        main_box.append(&indexing_revealer);
 
         let panel_parts: Vec<gtk4::Widget> = vec![
             category_scroll.clone().upcast(),
             loading_bar.clone().upcast(),
             overlay.clone().upcast(),
             progress_revealer.clone().upcast(),
-            indexing_revealer.clone().upcast(),
         ];
 
         let settings = Settings::load(&store);
@@ -681,10 +649,6 @@ impl SpotlightWindow {
             history_opened: Cell::new(false),
             pointer_origin: Cell::new(None),
             panel_parts,
-            indexing_revealer,
-            indexing_label,
-            indexing_pbar,
-            indexing_timer_id: Rc::new(RefCell::new(None)),
             progress_revealer,
             progress_spinner,
             progress_label,
@@ -755,7 +719,6 @@ impl SpotlightWindow {
     /// focus-loss handler and the click-outside D-Bus request from the Shell extension.
     fn hide_window(self: &Rc<Self>) {
         self.window.set_visible(false);
-        self.stop_indexing_timer();
     }
 
     /// Entry point for the Shell extension's "click landed outside the window" report
@@ -780,7 +743,6 @@ impl SpotlightWindow {
         self.reset_to_root();
         self.window.present();
         self.search_entry.grab_focus();
-        self.start_indexing_timer();
         self.refresh_states();
         self.refresh_currencies();
         self.refresh_extras();
@@ -951,65 +913,6 @@ impl SpotlightWindow {
                 s.loading_end();
                 glib::ControlFlow::Break
             }
-        });
-    }
-
-    // ---- indexing banner -----------------------------------------------------
-
-    fn start_indexing_timer(self: &Rc<Self>) {
-        if self.indexing_timer_id.borrow().is_none() && self.window.is_visible() {
-            let self_c = self.clone();
-            let id = glib::timeout_add_seconds_local(3, move || {
-                if !self_c.window.is_visible() {
-                    // Drop the handle and stop ticking; removing the source
-                    // from within its own callback is not safe
-                    *self_c.indexing_timer_id.borrow_mut() = None;
-                    return glib::ControlFlow::Break;
-                }
-                self_c.check_indexing_status();
-                glib::ControlFlow::Continue
-            });
-            *self.indexing_timer_id.borrow_mut() = Some(id);
-        }
-    }
-
-    fn stop_indexing_timer(&self) {
-        if let Some(id) = self.indexing_timer_id.borrow_mut().take() {
-            id.remove();
-        }
-    }
-
-    fn check_indexing_status(&self) {
-        let (sender, receiver) = std::sync::mpsc::channel::<(bool, String, f64)>();
-
-        let ind_revealer = self.indexing_revealer.clone();
-        let ind_label = self.indexing_label.clone();
-        let ind_pbar = self.indexing_pbar.clone();
-
-        glib::timeout_add_local(Duration::from_millis(5), move || match receiver.try_recv() {
-            Ok((is_indexing, _status, progress)) => {
-                if is_indexing {
-                    let percent = (progress * 100.0) as i32;
-                    let label_text = if percent > 0 {
-                        format!("Indexing files in background... ({}%)", percent)
-                    } else {
-                        "Indexing files in background...".to_string()
-                    };
-                    ind_label.set_text(&label_text);
-                    ind_pbar.set_fraction(progress.clamp(0.0, 1.0));
-                    ind_revealer.set_reveal_child(true);
-                } else {
-                    ind_revealer.set_reveal_child(false);
-                }
-                glib::ControlFlow::Break
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
-        });
-
-        std::thread::spawn(move || {
-            let res = crate::search::get_indexing_status_plain();
-            let _ = sender.send(res);
         });
     }
 

@@ -2,6 +2,7 @@
 
 use super::currency::CurrencyTable;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 /// Exponents of [length, mass, time, temperature, data, angle, currency, current].
 pub type Dim = [i8; 8];
@@ -235,9 +236,7 @@ charge|mah|3.6|Milliamp-hours|milliamphour
 charge|ah|3600|Amp-hours|amphour
 ";
 
-lazy_static::lazy_static! {
-    static ref UNITS: (Vec<Unit>, HashMap<String, usize>) = build();
-}
+static UNITS: LazyLock<(Vec<Unit>, HashMap<String, usize>)> = LazyLock::new(build);
 
 fn eval_factor(s: &str) -> f64 {
     let mut acc = 1.0;
