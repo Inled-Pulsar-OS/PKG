@@ -107,3 +107,15 @@ fn password_manager_hint_is_not_recorded() {
     mgr.record_clip_with_formats("ordinary", &["text/plain"]);
     assert_eq!(mgr.get_items().len(), 1);
 }
+
+#[test]
+fn search_history_returns_clipboard_rows_for_matching_query() {
+    let mgr = manager_with_max(50);
+    mgr.record_clip("alpha one");
+    mgr.record_clip("beta two");
+    mgr.record_clip("alpha three");
+    let rows = mgr.search_history("alpha");
+    let urls: Vec<&str> = rows.iter().map(|r| r.url.as_str()).collect();
+    assert_eq!(urls, vec!["clipboard://0", "clipboard://2"]);
+    assert!(rows.iter().all(|r| r.app.is_none()));
+}

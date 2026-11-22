@@ -1223,10 +1223,9 @@ impl SpotlightWindow {
             "all" | "applications" | "actions" => {
                 let found: Vec<SearchResult> = if category == "all" && !is_empty {
                     self.backend
-                        .search_instant(&query, "all", DEFAULT_LIMIT)
-                        .into_iter()
-                        .filter(|r| r.app.is_none() && r.url.starts_with("clipboard://"))
-                        .collect()
+                        .clipboard()
+                        .map(|mgr| mgr.search_history(&query).into_iter().take(3).collect())
+                        .unwrap_or_default()
                 } else {
                     Vec::new()
                 };
