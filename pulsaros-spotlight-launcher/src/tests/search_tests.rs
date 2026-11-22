@@ -40,15 +40,15 @@ fn browser_history_plain_returns_empty_when_no_database() {
 
 #[test]
 fn matches_category_filters_correctly() {
-    assert!(matches_category("document.pdf", "documents"));
-    assert!(matches_category("notes.txt", "documents"));
-    assert!(!matches_category("photo.jpg", "documents"));
-    assert!(matches_category("photo.png", "images"));
-    assert!(matches_category("song.mp3", "audio"));
-    assert!(matches_category("clip.mp4", "video"));
-    assert!(matches_category("anything.xyz", "all"));
-    assert!(matches_category("anything.xyz", "files"));
-    assert!(matches_category("noext", "files"));
+    assert!(matches_category("document.pdf", Category::Documents));
+    assert!(matches_category("notes.txt", Category::Documents));
+    assert!(!matches_category("photo.jpg", Category::Documents));
+    assert!(matches_category("photo.png", Category::Images));
+    assert!(matches_category("song.mp3", Category::Audio));
+    assert!(matches_category("clip.mp4", Category::Video));
+    assert!(matches_category("anything.xyz", Category::All));
+    assert!(matches_category("anything.xyz", Category::Files));
+    assert!(matches_category("noext", Category::Files));
 }
 
 /// Tests that own the default main context run one at a time.

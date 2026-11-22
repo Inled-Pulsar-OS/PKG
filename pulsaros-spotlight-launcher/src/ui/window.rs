@@ -1,5 +1,6 @@
 use adw::prelude::AnimationExt as _;
 use crate::calculator::{CalcHistory, CalcResult, Calculator};
+use crate::category::Category;
 use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
 use crate::core::commands::{self, Command};
@@ -23,23 +24,6 @@ use std::time::Duration;
 
 mod extras;
 use extras::{Extras, View};
-
-/// (category id, mode name, glyph icon).
-const CATEGORIES: &[(&str, &str, &str)] = &[
-    ("all", "All", "spotlight"),
-    ("applications", "Apps", "applications"),
-    ("files", "Files", "files"),
-    ("documents", "Docs", "files"),
-    ("images", "Images", "files"),
-    ("audio", "Music", "files"),
-    ("video", "Videos", "files"),
-    ("clipboard", "Clip", "clipboard"),
-    ("actions", "Actions", "actions"),
-    ("windows", "Windows", "actions"),
-    ("snippets", "Snippets", "actions"),
-    ("calc", "Calc", "spotlight"),
-    ("web", "Web", "spotlight"),
-];
 
 const DEBOUNCE_MS: u64 = 80;
 const BASE_W: i32 = 712;
@@ -92,7 +76,7 @@ pub struct SpotlightWindow {
     result_view: Rc<ResultView>,
     config: Rc<RefCell<SpotlightConfig>>,
     backend: SearchBackend,
-    category: RefCell<String>,
+    category: Cell<Category>,
     current_dir: Rc<RefCell<Option<String>>>,
     debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
     search_seq: Rc<Cell<u64>>,
@@ -118,7 +102,7 @@ pub struct SpotlightWindow {
     dialog: Dialog,
     dialog_backdrop: gtk4::Box,
     more_popover: gtk4::Popover,
-    category_buttons: RefCell<HashMap<String, gtk4::ToggleButton>>,
+    category_buttons: RefCell<HashMap<Category, gtk4::ToggleButton>>,
     loading_bar: gtk4::ProgressBar,
     loading_count: Cell<u32>,
     loading_timer: RefCell<Option<glib::SourceId>>,
@@ -382,7 +366,7 @@ impl SpotlightWindow {
         set_mode_icon(&mode_icon, "spotlight");
 
         let search_entry = gtk4::Entry::builder()
-            .placeholder_text(CATEGORIES[0].1)
+            .placeholder_text(Category::All.label())
             .hexpand(true)
             .has_frame(false)
             .valign(gtk4::Align::Center)
@@ -416,7 +400,7 @@ impl SpotlightWindow {
         for (n, tip) in BAR_BUTTONS {
             let img = gtk4::Image::new();
             img.set_pixel_size(26);
-            let glyph = shortcuts::mode_id(n).and_then(|id| CATEGORIES.iter().find(|c| c.0 == id)).map_or("spotlight", |c| c.2);
+            let glyph = shortcuts::mode_id(n).and_then(Category::from_id).map_or("spotlight", Category::glyph);
             set_mode_icon(&img, glyph);
             let b = gtk4::Button::new();
             b.set_child(Some(&img));
@@ -434,15 +418,15 @@ impl SpotlightWindow {
         category_bar.add_css_class("category-bar");
         let mut cat_buttons = HashMap::new();
 
-        for &(cat_id, cat_label, _) in CATEGORIES {
+        for cat in Category::ALL {
             let btn = gtk4::ToggleButton::builder()
-                .label(cat_label)
-                .active(cat_id == "all")
+                .label(cat.label())
+                .active(cat == Category::All)
                 .focusable(false)
                 .build();
             btn.add_css_class("category-btn");
             category_bar.append(&btn);
-            cat_buttons.insert(cat_id.to_string(), btn);
+            cat_buttons.insert(cat, btn);
         }
 
         let category_scroll = gtk4::ScrolledWindow::builder()
@@ -616,7 +600,7 @@ impl SpotlightWindow {
             result_view,
             config: config_rc,
             backend,
-            category: RefCell::new("all".to_string()),
+            category: Cell::new(Category::All),
             current_dir: Rc::new(RefCell::new(None)),
             debounce_id: Rc::new(RefCell::new(None)),
             search_seq: Rc::new(Cell::new(0)),
@@ -715,11 +699,11 @@ impl SpotlightWindow {
 
         for (cat_id, btn) in spotlight.category_buttons.borrow().iter() {
             let s = spotlight.clone();
-            let cid = cat_id.clone();
+            let cid = *cat_id;
             let btn_c = btn.clone();
             btn.connect_toggled(move |_| {
                 if btn_c.is_active() {
-                    s.set_category_by_id(&cid);
+                    s.set_category(cid);
                 }
             });
         }
@@ -814,9 +798,9 @@ impl SpotlightWindow {
         *self.current_dir.borrow_mut() = None;
         self.history_mode.set(false);
         self.calc_hist_mode.set(false);
-        *self.category.borrow_mut() = "all".to_string();
+        self.category.set(Category::All);
         self.apply_layout(if self.revealed.get() { LayoutState::IdleModes } else { LayoutState::Idle });
-        self.set_mode(0);
+        self.set_mode(Category::All);
         self.search_entry.set_text("");
     }
 
@@ -1165,21 +1149,14 @@ impl SpotlightWindow {
         self.search_seq.set(seq);
 
         let query = self.search_entry.text().to_string();
-        let category = self.category.borrow().clone();
+        let category = self.category.get();
         if self.search_view(&query, keep) {
             return;
         }
 
         // If in media/document category and query empty and not browsing, start browsing the category dir
-        if ["files", "documents", "images", "audio", "video"].contains(&category.as_str()) && query.trim().is_empty() && self.current_dir.borrow().is_none() {
-            let target_dir = match category.as_str() {
-                "documents" => dirs::document_dir(),
-                "images" => dirs::picture_dir(),
-                "audio" => dirs::audio_dir(),
-                "video" => dirs::video_dir(),
-                _ => None,
-            }.or_else(|| dirs::home_dir());
-            if let Some(d) = target_dir {
+        if query.trim().is_empty() && self.current_dir.borrow().is_none() {
+            if let Some(d) = category.browse_dir() {
                 if d.is_dir() {
                     *self.current_dir.borrow_mut() = Some(d.display().to_string());
                 }
@@ -1218,9 +1195,9 @@ impl SpotlightWindow {
             self.render(keep);
             return;
         }
-        let sections: SectionList = match category.as_str() {
-            "all" | "applications" | "actions" => {
-                let found: Vec<SearchResult> = if category == "all" && !is_empty {
+        let sections: SectionList = match category {
+            Category::All | Category::Applications | Category::Actions => {
+                let found: Vec<SearchResult> = if category == Category::All && !is_empty {
                     self.backend
                         .clipboard()
                         .map(|mgr| mgr.search_history(&query).into_iter().take(3).collect())
@@ -1228,7 +1205,7 @@ impl SpotlightWindow {
                 } else {
                     Vec::new()
                 };
-                let calc = if category == "all" && !is_empty { Calculator::calculate(&query) } else { None };
+                let calc = if category == Category::All && !is_empty { Calculator::calculate(&query) } else { None };
                 let ql = query.trim().to_lowercase();
                 let mut extra: Vec<Row> = Vec::new();
                 if let Some(c) = &calc {
@@ -1241,7 +1218,7 @@ impl SpotlightWindow {
                 let payloads: HashMap<String, SearchResult> =
                     found.into_iter().map(|r| (row_from_result(&r).row.id, r)).collect();
                 let mut secs = self.core_sections(&query, &extra);
-                if category == "all" && !is_empty {
+                if category == Category::All && !is_empty {
                     self.add_extra_rows(&query, &mut secs);
                 }
                 for (_, rows) in secs.iter_mut() {
@@ -1255,13 +1232,13 @@ impl SpotlightWindow {
                 if calc.is_some() {
                     secs.retain(|(t, _)| t != "Search the web");
                 }
-                if category == "actions" {
+                if category == Category::Actions {
                     for (_, rows) in secs.iter_mut() {
                         rows.retain(|r| r.row.kind == RowKind::Command);
                     }
                     secs.retain(|(t, rows)| !rows.is_empty() && t != "Favorites" && t != "Suggestions");
                 }
-                if category == "applications" {
+                if category == Category::Applications {
                     for (_, rows) in secs.iter_mut() {
                         rows.retain(|r| r.row.kind == RowKind::App);
                     }
@@ -1269,16 +1246,16 @@ impl SpotlightWindow {
                 }
                 secs
             }
-            "clipboard" => {
+            Category::Clipboard => {
                 let rows: Vec<RowData> =
-                    self.backend.search_instant(&query, "clipboard", DEFAULT_LIMIT).iter().map(row_from_result).collect();
+                    self.backend.search_instant(&query, Category::Clipboard, DEFAULT_LIMIT).iter().map(row_from_result).collect();
                 vec![("Clipboard".to_string(), rows)]
             }
-            "web" => {
+            Category::Web => {
                 let rows: Vec<RowData> = self.backend.search_web(&query).iter().map(row_from_result).collect();
                 vec![("Web".to_string(), rows)]
             }
-            "calc" => {
+            Category::Calc => {
                 let mut rows = Vec::new();
                 if let Some(c) = Calculator::calculate(if is_empty { "1+1" } else { &query }) {
                     rows.push(calc_row(&c, format!("calc:{}", c.answer)));
@@ -1303,20 +1280,12 @@ impl SpotlightWindow {
         self.render(keep);
 
         // Async Nautilus file search (appended to Results, or its own section)
-        let needs_files = (!is_empty || ["files", "documents", "images", "audio", "video"].contains(&category.as_str()))
-            && !["applications", "actions", "clipboard", "web", "calc", "windows", "snippets"].contains(&category.as_str());
-        let target = match category.as_str() {
-            "documents" => "Documents",
-            "images" => "Images",
-            "audio" => "Music",
-            "video" => "Videos",
-            "all" => "Results",
-            _ => "Files",
-        };
+        let needs_files = (!is_empty || category.is_file_tab()) && category.needs_file_search();
+        let target = category.section_title();
         if needs_files {
             self.loading_begin();
             let s = self.clone();
-            self.backend.search_async(&query, &category, DEFAULT_LIMIT, move |file_results| {
+            self.backend.search_async(&query, category, DEFAULT_LIMIT, move |file_results| {
                 s.loading_end();
                 let rows = file_results.iter().map(row_from_result).collect();
                 s.append_rows(seq, target, rows);
@@ -1324,12 +1293,12 @@ impl SpotlightWindow {
         }
 
         // Async browser history (web category, or web results within "all")
-        let wants_history = category == "web" || (category == "all" && !is_empty);
+        let wants_history = category == Category::Web || (category == Category::All && !is_empty);
         if wants_history {
-            let limit = if category == "web" { 6 } else { 3 };
+            let limit = if category == Category::Web { 6 } else { 3 };
             self.loading_begin();
             let s = self.clone();
-            let title = if category == "web" { "Web" } else { "Results" };
+            let title = if category == Category::Web { "Web" } else { "Results" };
             self.backend.search_browser_history_async(&query, limit, move |hist| {
                 s.loading_end();
                 let rows = hist.iter().map(row_from_result).collect();
@@ -1367,41 +1336,24 @@ impl SpotlightWindow {
     }
 
     fn mode_index(&self) -> usize {
-        let cur = self.category.borrow().clone();
-        CATEGORIES.iter().position(|(id, _, _)| *id == cur).unwrap_or(0)
+        let cur = self.category.get();
+        Category::ALL.iter().position(|c| *c == cur).unwrap_or(0)
     }
 
     fn mode_name(&self) -> &'static str {
-        CATEGORIES[self.mode_index()].1
+        self.category.get().label()
     }
 
     /// Switch mode: updates category, glyph and placeholder (no search).
-    fn set_mode(&self, idx: usize) {
-        let (id, name, glyph) = CATEGORIES[idx % CATEGORIES.len()];
+    fn set_mode(&self, cat: Category) {
         self.query_typed.set(false);
-        *self.category.borrow_mut() = id.to_string();
-        set_mode_icon(&self.mode_icon, glyph);
-        let ph = match id {
-            "all" => "Spotlight Search...",
-            "applications" => "Search Applications...",
-            "files" => "Search Files...",
-            "documents" => "Search Documents...",
-            "images" => "Search Images...",
-            "audio" => "Search Music...",
-            "video" => "Search Videos...",
-            "clipboard" => "Search Clipboard...",
-            "actions" => "Search Commands & Settings...",
-            "windows" => "Filter Open Windows...",
-            "snippets" => "Search Snippets...",
-            "calc" => "Calculate (e.g. 24*15, $50 in EUR)...",
-            "web" => "Search the Web...",
-            _ => name,
-        };
-        self.search_entry.set_placeholder_text(Some(ph));
+        self.category.set(cat);
+        set_mode_icon(&self.mode_icon, cat.glyph());
+        self.search_entry.set_placeholder_text(Some(cat.placeholder()));
 
         if let Ok(buttons) = self.category_buttons.try_borrow() {
             for (cid, btn) in buttons.iter() {
-                let active = cid == id;
+                let active = *cid == cat;
                 if btn.is_active() != active {
                     btn.set_active(active);
                 }
@@ -1409,29 +1361,26 @@ impl SpotlightWindow {
         }
     }
 
-    fn set_category_by_id(self: &Rc<Self>, cid: &str) {
-        if let Some(pos) = CATEGORIES.iter().position(|(id, _, _)| *id == cid) {
-            self.goto_mode(pos);
-        }
+    fn set_category(self: &Rc<Self>, cat: Category) {
+        self.goto_mode(cat);
     }
 
     fn cycle_category(self: &Rc<Self>, step: i32) {
-        let n = CATEGORIES.len() as i32;
-        self.goto_mode((self.mode_index() as i32 + step).rem_euclid(n) as usize);
+        let n = Category::ALL.len() as i32;
+        self.goto_mode(Category::ALL[(self.mode_index() as i32 + step).rem_euclid(n) as usize]);
     }
 
-    fn goto_mode(self: &Rc<Self>, idx: usize) {
-        let (id, _, _) = CATEGORIES[idx % CATEGORIES.len()];
+    fn goto_mode(self: &Rc<Self>, cat: Category) {
         self.leave_view();
-        self.set_mode(idx);
+        self.set_mode(cat);
         *self.current_dir.borrow_mut() = None;
         self.history_mode.set(false);
         self.calc_hist_mode.set(false);
-        match id {
-            "windows" => {
+        match cat {
+            Category::Windows => {
                 self.push_view(View::Windows, "Filter open windows\u{2026}");
             }
-            "snippets" => {
+            Category::Snippets => {
                 self.push_view(View::Snippets, "Search snippets\u{2026}");
             }
             _ => {
@@ -2252,7 +2201,7 @@ impl SpotlightWindow {
             || self.history_mode.get()
             || self.current_dir.borrow().is_some();
         LayoutCtx {
-            mode_all: &*self.category.borrow() == "all",
+            mode_all: self.category.get() == Category::All,
             query_empty: empty,
             query_typed: self.query_typed.get(),
             at_root: !sub_state && empty,
@@ -2274,9 +2223,9 @@ impl SpotlightWindow {
 
     /// Open the Panel in mode `n` (1-based, as Alt+n) with an empty query.
     fn open_bar_mode(self: &Rc<Self>, n: usize) {
-        let Some(id) = shortcuts::mode_id(n) else { return };
+        let Some(cat) = shortcuts::mode_id(n).and_then(Category::from_id) else { return };
         self.apply_layout(LayoutState::Panel);
-        self.set_category_by_id(id);
+        self.set_category(cat);
         self.search_entry.grab_focus();
     }
 
@@ -2388,8 +2337,8 @@ impl SpotlightWindow {
             Act::CatNext => self.cycle_category(1),
             Act::CatPrev => self.cycle_category(-1),
             Act::Mode(n) => {
-                if let Some(id) = shortcuts::mode_id(n) {
-                    self.set_category_by_id(id);
+                if let Some(cat) = shortcuts::mode_id(n).and_then(Category::from_id) {
+                    self.set_category(cat);
                 }
             }
         }

@@ -1,5 +1,6 @@
 use crate::apps::{DesktopApp, load_apps};
 use crate::calculator::Calculator;
+use crate::category::Category;
 use crate::clipboard::ClipboardManager;
 use crate::core::debounce::{Debounce, RELOAD_DELAY_MS};
 use rusqlite::{Connection as SqliteConnection, OpenFlags};
@@ -108,29 +109,29 @@ impl SearchBackend {
         self.apps.borrow().clone()
     }
 
-    pub fn search_instant(&self, query: &str, category: &str, limit: usize) -> Vec<SearchResult> {
-        if category == "clipboard" {
+    pub fn search_instant(&self, query: &str, category: Category, limit: usize) -> Vec<SearchResult> {
+        if category == Category::Clipboard {
             if let Some(mgr) = &self.clipboard_mgr {
                 return mgr.search_history(query);
             }
             return Vec::new();
         }
 
-        if category == "web" {
+        if category == Category::Web {
             return self.search_web(query);
         }
 
         let q_clean = query.trim();
 
-        if category == "apps" || category == "applications" {
+        if category == Category::Applications {
             return self.search_apps(q_clean, limit);
         }
 
-        if q_clean.is_empty() && category == "all" {
+        if q_clean.is_empty() && category == Category::All {
             return self.search_apps("", limit.max(200));
         }
 
-        if category == "all" {
+        if category == Category::All {
             let mut results = Vec::new();
 
             // 1. Calculator
@@ -260,11 +261,11 @@ impl SearchBackend {
         results
     }
 
-    pub fn search_async<F>(&self, query: &str, category: &str, limit: usize, callback: F)
+    pub fn search_async<F>(&self, query: &str, category: Category, limit: usize, callback: F)
     where
         F: Fn(Vec<SearchResult>) + 'static,
     {
-        if category == "apps" || category == "applications" || category == "clipboard" || category == "web" {
+        if matches!(category, Category::Applications | Category::Clipboard | Category::Web) {
             gtk4::glib::idle_add_local(move || {
                 callback(Vec::new());
                 gtk4::glib::ControlFlow::Break
@@ -273,8 +274,7 @@ impl SearchBackend {
         }
 
         let query = query.to_string();
-        let category = category.to_string();
-        run_async(JobKind::Files, move |ctx| search_nautilus(ctx, &query, &category, limit), callback);
+        run_async(JobKind::Files, move |ctx| search_nautilus(ctx, &query, category, limit), callback);
     }
 }
 
@@ -369,31 +369,31 @@ where
     let _ = tx.send(Job { id, kind, run: Box::new(job) });
 }
 
-pub fn matches_category(filename: &str, category: &str) -> bool {
-    if category.is_empty() || category == "all" || category == "files" {
+pub fn matches_category(filename: &str, category: Category) -> bool {
+    if matches!(category, Category::All | Category::Files) {
         return true;
     }
     let lower = filename.to_lowercase();
     let ext = lower.split('.').last().unwrap_or("");
     match category {
-        "documents" => matches!(
+        Category::Documents => matches!(
             ext,
             "pdf" | "txt" | "md" | "doc" | "docx" | "odt" | "xls" | "xlsx" | "ods"
                 | "ppt" | "pptx" | "odp" | "csv" | "rtf" | "epub" | "html" | "json"
                 | "xml" | "yaml" | "yml" | "sh" | "py" | "c" | "cpp" | "h" | "rs"
                 | "go" | "js" | "ts" | "toml" | "log" | "tex"
         ),
-        "images" => matches!(
+        Category::Images => matches!(
             ext,
             "png" | "jpg" | "jpeg" | "svg" | "webp" | "gif" | "avif" | "ico"
                 | "bmp" | "tiff" | "heic" | "psd" | "raw"
         ),
-        "audio" => matches!(
+        Category::Audio => matches!(
             ext,
             "mp3" | "flac" | "wav" | "ogg" | "m4a" | "aac" | "opus" | "wma"
                 | "oga" | "mid" | "midi"
         ),
-        "video" => matches!(
+        Category::Video => matches!(
             ext,
             "mp4" | "mkv" | "avi" | "mov" | "webm" | "flv" | "wmv" | "m4v"
                 | "3gp" | "ts" | "mpg" | "mpeg"
@@ -402,7 +402,7 @@ pub fn matches_category(filename: &str, category: &str) -> bool {
     }
 }
 
-fn search_nautilus(ctx: &mut WorkerCtx, query: &str, category: &str, limit: usize) -> Vec<SearchResult> {
+fn search_nautilus(ctx: &mut WorkerCtx, query: &str, category: Category, limit: usize) -> Vec<SearchResult> {
     let mut results = Vec::new();
     let q_trimmed = query.trim();
     if q_trimmed.is_empty() {

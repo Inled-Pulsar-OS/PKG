@@ -1,5 +1,6 @@
 mod apps;
 mod calculator;
+mod category;
 mod clipboard;
 mod config;
 mod control_service;
