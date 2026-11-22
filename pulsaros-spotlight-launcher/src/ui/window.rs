@@ -131,6 +131,12 @@ pub struct SpotlightWindow {
     mode_buttons: gtk4::Box,
     /// The buttons were shown at some point since the window opened.
     revealed: Cell<bool>,
+    /// The query text came from the user's typing (not from a mode or a view).
+    query_typed: Cell<bool>,
+    /// The Panel was opened by Down (home view).
+    home_opened: Cell<bool>,
+    /// The Panel was opened by Up (history).
+    history_opened: Cell<bool>,
     /// First pointer position seen since the window opened.
     pointer_origin: Cell<Option<(f64, f64)>>,
     /// Everything below the header row; hidden while the layout is Idle.
@@ -668,6 +674,9 @@ impl SpotlightWindow {
             layout: Cell::new(LayoutState::Idle),
             mode_buttons,
             revealed: Cell::new(false),
+            query_typed: Cell::new(false),
+            home_opened: Cell::new(false),
+            history_opened: Cell::new(false),
             pointer_origin: Cell::new(None),
             panel_parts,
             indexing_revealer,
@@ -795,6 +804,11 @@ impl SpotlightWindow {
         self.mode_buttons.set_visible(state == LayoutState::IdleModes);
         if state == LayoutState::IdleModes {
             self.revealed.set(true);
+        }
+        if idle {
+            self.home_opened.set(false);
+            self.history_opened.set(false);
+            self.query_typed.set(false);
         }
         for w in &self.panel_parts {
             w.set_visible(!idle);
@@ -1062,8 +1076,20 @@ impl SpotlightWindow {
 
     fn on_search_changed(self: &Rc<Self>) {
         self.history_mode.set(false);
-        if self.layout.get() != LayoutState::Panel && !self.search_entry.text().is_empty() {
+        let empty = self.search_entry.text().is_empty();
+        if self.layout.get() != LayoutState::Panel && !empty {
             self.apply_layout(LayoutState::Panel);
+        }
+        if empty {
+            let typed = self.query_typed.replace(false);
+            let ctx = LayoutCtx { query_typed: typed, ..self.panel_ctx() };
+            let o = layout::transition(self.layout.get(), &ctx, LayoutEvent::QueryEmptied);
+            if o.action == LayoutAction::Collapse {
+                self.reset_to_root();
+                return;
+            }
+        } else {
+            self.query_typed.set(true);
         }
         if let Some(id) = self.debounce_id.borrow_mut().take() {
             id.remove();
@@ -1351,6 +1377,7 @@ impl SpotlightWindow {
     /// Switch mode: updates category, glyph and placeholder (no search).
     fn set_mode(&self, idx: usize) {
         let (id, name, glyph) = CATEGORIES[idx % CATEGORIES.len()];
+        self.query_typed.set(false);
         *self.category.borrow_mut() = id.to_string();
         set_mode_icon(&self.mode_icon, glyph);
         let ph = match id {
@@ -2053,6 +2080,13 @@ impl SpotlightWindow {
     // ---- keyboard --------------------------------------------------------------------
 
     fn go_back(self: &Rc<Self>) {
+        let o = layout::transition(self.layout.get(), &self.panel_ctx(), LayoutEvent::Esc);
+        if o.action == LayoutAction::Close {
+            self.window.set_visible(false);
+            return;
+        }
+        // Clearing the query here is a step back, not a typed deletion.
+        self.query_typed.set(false);
         if self.dialog_open() {
             self.close_dialog();
         } else if self.panel_open() {
@@ -2074,8 +2108,6 @@ impl SpotlightWindow {
             self.do_search(false);
         } else if !self.search_entry.text().is_empty() {
             self.search_entry.set_text("");
-        } else {
-            self.window.set_visible(false);
         }
     }
 
@@ -2209,6 +2241,26 @@ impl SpotlightWindow {
         LayoutCtx { revealed: self.revealed.get(), pointer_origin: self.pointer_origin.get(), ..LayoutCtx::default() }
     }
 
+    /// Context for Esc, Shift+Esc and the query-emptied event.
+    fn panel_ctx(&self) -> LayoutCtx {
+        let empty = self.search_entry.text().is_empty();
+        let sub_state = self.dialog_open()
+            || self.panel_open()
+            || self.x.view.get() != View::Root
+            || self.calc_hist_mode.get()
+            || self.history_mode.get()
+            || self.current_dir.borrow().is_some();
+        LayoutCtx {
+            mode_all: &*self.category.borrow() == "all",
+            query_empty: empty,
+            query_typed: self.query_typed.get(),
+            at_root: !sub_state && empty,
+            home_opened: self.home_opened.get(),
+            history_opened: self.history_opened.get(),
+            ..self.layout_ctx()
+        }
+    }
+
     fn on_pointer(&self, x: f64, y: f64) {
         let o = layout::transition(self.layout.get(), &self.layout_ctx(), LayoutEvent::Pointer { x, y });
         if o.action == LayoutAction::RecordPointer {
@@ -2247,10 +2299,12 @@ impl SpotlightWindow {
         match layout::transition(self.layout.get(), &self.layout_ctx(), event).action {
             LayoutAction::ShowHome => {
                 self.apply_layout(LayoutState::Panel);
+                self.home_opened.set(true);
                 self.do_search(false);
             }
             LayoutAction::ShowHistory => {
                 self.apply_layout(LayoutState::Panel);
+                self.history_opened.set(true);
                 if self.settings.borrow().history().is_empty() {
                     self.do_search(false);
                 } else {
@@ -2304,6 +2358,7 @@ impl SpotlightWindow {
             Act::SectionNext => self.result_view.jump_section(true),
             Act::Back => self.go_back(),
             Act::Root => {
+                // Collapse and the old reset both land on the bar: reset_to_root follows the revealed flag.
                 self.reset_to_root();
                 self.search_entry.grab_focus();
             }
