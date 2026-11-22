@@ -276,3 +276,7 @@ impl RootSearch {
 #[cfg(test)]
 #[path = "../tests/root_search_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../tests/search_snapshot_tests.rs"]
+mod snapshot_tests;
