@@ -3,6 +3,7 @@ use crate::clipboard::ClipboardManager;
 use crate::config::SpotlightConfig;
 use crate::core::commands::{self, Command};
 use crate::core::frecency::Frecency;
+use crate::core::layout::LayoutState;
 use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch};
 use crate::core::settings::Settings;
 use crate::core::shortcuts::{self, Act, Mods};
@@ -42,6 +43,9 @@ const CATEGORIES: &[(&str, &str, &str)] = &[
 const DEBOUNCE_MS: u64 = 80;
 const BASE_W: i32 = 712;
 const BASE_H: i32 = 580;
+/// Idle pill size (before zoom).
+const PILL_W: i32 = 740;
+const PILL_H: i32 = 60;
 const ZOOM_MIN: f64 = 0.8;
 const ZOOM_MAX: f64 = 1.6;
 
@@ -116,6 +120,10 @@ pub struct SpotlightWindow {
     toast_cb: RefCell<Option<Rc<dyn Fn()>>>,
     toast_timer: RefCell<Option<glib::SourceId>>,
     zoom_provider: gtk4::CssProvider,
+
+    layout: Cell<LayoutState>,
+    /// Everything below the header row; hidden while the layout is Idle.
+    panel_parts: Vec<gtk4::Widget>,
 
     indexing_revealer: gtk4::Revealer,
     indexing_label: gtk4::Label,
@@ -260,7 +268,8 @@ fn zoom_css(z: f64) -> String {
          window.spotlight-window .section-header {{ font-size: {}px; }}
          window.spotlight-window .icon-tile {{ min-width: {}px; min-height: {}px; }}
          window.spotlight-window .result-icon {{ -gtk-icon-size: {}px; }}
-         window.spotlight-window .search-header {{ min-height: {}px; }}",
+         window.spotlight-window .search-header {{ min-height: {}px; }}
+         window.spotlight-window.idle .search-header {{ min-height: {}px; }}",
         p(13.0),
         p(30.0),
         p(56.0),
@@ -270,7 +279,8 @@ fn zoom_css(z: f64) -> String {
         p(44.0),
         p(44.0),
         p(40.0),
-        p(76.0)
+        p(76.0),
+        p(PILL_H as f64)
     )
 }
 
@@ -558,6 +568,14 @@ impl SpotlightWindow {
         main_box.append(&progress_revealer);
         main_box.append(&indexing_revealer);
 
+        let panel_parts: Vec<gtk4::Widget> = vec![
+            category_scroll.clone().upcast(),
+            loading_bar.clone().upcast(),
+            overlay.clone().upcast(),
+            progress_revealer.clone().upcast(),
+            indexing_revealer.clone().upcast(),
+        ];
+
         let settings = Settings::load(&store);
         let frecency = Frecency::load(&store);
 
@@ -612,6 +630,8 @@ impl SpotlightWindow {
             toast_cb: RefCell::new(None),
             toast_timer: RefCell::new(None),
             zoom_provider,
+            layout: Cell::new(LayoutState::Idle),
+            panel_parts,
             indexing_revealer,
             indexing_label,
             indexing_pbar,
@@ -723,9 +743,29 @@ impl SpotlightWindow {
         self.history_mode.set(false);
         self.calc_hist_mode.set(false);
         *self.category.borrow_mut() = "all".to_string();
+        self.apply_layout(LayoutState::Idle);
         self.set_mode(0);
         self.search_entry.set_text("");
-        self.do_search(false);
+    }
+
+    /// Show only the header row in Idle, the full window otherwise.
+    fn apply_layout(&self, state: LayoutState) {
+        self.layout.set(state);
+        let idle = state == LayoutState::Idle;
+        for w in &self.panel_parts {
+            w.set_visible(!idle);
+        }
+        if idle {
+            self.window.add_css_class("idle");
+        } else {
+            self.window.remove_css_class("idle");
+        }
+        self.apply_size(self.config.borrow().zoom.clamp(ZOOM_MIN, ZOOM_MAX));
+    }
+
+    fn apply_size(&self, zoom: f64) {
+        let (w, h) = if self.layout.get() == LayoutState::Idle { (PILL_W, PILL_H) } else { (BASE_W, BASE_H) };
+        self.window.set_size_request((w as f64 * zoom) as i32, (h as f64 * zoom) as i32);
     }
 
     // ---- loading bar / toast -------------------------------------------------
@@ -961,6 +1001,9 @@ impl SpotlightWindow {
 
     fn on_search_changed(self: &Rc<Self>) {
         self.history_mode.set(false);
+        if self.layout.get() == LayoutState::Idle && !self.search_entry.text().is_empty() {
+            self.apply_layout(LayoutState::Panel);
+        }
         if let Some(id) = self.debounce_id.borrow_mut().take() {
             id.remove();
         }
@@ -1025,6 +1068,10 @@ impl SpotlightWindow {
     }
 
     fn do_search(self: &Rc<Self>, keep: bool) {
+        // Idle draws no results: skip the root search (also from state probes and app updates).
+        if self.layout.get() == LayoutState::Idle {
+            return;
+        }
         let seq = self.search_seq.get() + 1;
         self.search_seq.set(seq);
 
@@ -1936,7 +1983,7 @@ impl SpotlightWindow {
     fn set_zoom(&self, z: f64) {
         let z = ((z * 10.0).round() / 10.0).clamp(ZOOM_MIN, ZOOM_MAX);
         self.zoom_provider.load_from_data(&zoom_css(z));
-        self.window.set_size_request((BASE_W as f64 * z) as i32, (BASE_H as f64 * z) as i32);
+        self.apply_size(z);
         let mut c = self.config.borrow_mut();
         c.zoom = z;
         c.save();
