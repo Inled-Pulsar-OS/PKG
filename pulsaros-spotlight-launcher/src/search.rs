@@ -1,8 +1,10 @@
 use crate::apps::{DesktopApp, load_apps};
-use crate::calculator::Calculator;
 use crate::category::Category;
 use crate::clipboard::ClipboardManager;
 use crate::core::debounce::{Debounce, RELOAD_DELAY_MS};
+use crate::core::provider::Job as ProviderJob;
+use crate::core::root_search::Row;
+use crate::core::worker::{JobKind, WorkerCtx};
 use crate::ui::results::{result_row, RowData};
 use rusqlite::{Connection as SqliteConnection, OpenFlags};
 use std::cell::RefCell;
@@ -11,7 +13,6 @@ use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::OnceLock;
 use std::thread;
-use zbus::blocking::Connection as ZbusConnection;
 
 pub const DEFAULT_LIMIT: usize = 500;
 
@@ -101,149 +102,6 @@ impl SearchBackend {
         self.apps.borrow().clone()
     }
 
-    pub fn search_instant(&self, query: &str, category: Category, limit: usize) -> Vec<RowData> {
-        if category == Category::Clipboard {
-            if let Some(mgr) = &self.clipboard_mgr {
-                return mgr.search_history(query);
-            }
-            return Vec::new();
-        }
-
-        if category == Category::Web {
-            return self.search_web(query);
-        }
-
-        let q_clean = query.trim();
-
-        if category == Category::Applications {
-            return self.search_apps(q_clean, limit);
-        }
-
-        if q_clean.is_empty() && category == Category::All {
-            return self.search_apps("", limit.max(200));
-        }
-
-        if category == Category::All {
-            let mut results = Vec::new();
-
-            // 1. Calculator
-            let calc_eval = Calculator::evaluate(q_clean);
-            if let Some((val_str, snippet)) = &calc_eval {
-                results.push(result_row(
-                    format!("calc://{}", val_str),
-                    val_str.clone(),
-                    "application/x-calculator".to_string(),
-                    snippet.clone(),
-                    None,
-                ));
-            }
-
-            // 2. Clipboard (top 3)
-            if let Some(mgr) = &self.clipboard_mgr {
-                let mut clips = mgr.search_history(q_clean);
-                clips.truncate(3);
-                results.extend(clips);
-            }
-
-            // 3. Applications
-            results.extend(self.search_apps(q_clean, limit));
-
-            // 4. Web search (top 1)
-            if !q_clean.is_empty() && calc_eval.is_none() {
-                let mut web = self.search_web(q_clean);
-                web.truncate(1);
-                results.extend(web);
-            }
-
-            return results;
-        }
-
-        Vec::new()
-    }
-
-    pub fn search_browser_history_async<F>(&self, query: &str, limit: usize, callback: F)
-    where
-        F: Fn(Vec<RowData>) + 'static,
-    {
-        let query = query.to_string();
-        run_async(JobKind::History, move |ctx| query_browser_history(ctx, &query, limit), callback);
-    }
-
-    pub fn search_web(&self, query: &str) -> Vec<RowData> {
-        // Instant web result (Google new-tab link). Browser-history lookup is
-        // intentionally NOT done here: it opens SQLite on the UI thread and can
-        // block on a locked places.sqlite. It runs asynchronously via
-        // search_browser_history_async() instead.
-        let q_strip = query.trim();
-        let mut results = Vec::new();
-
-        if !q_strip.is_empty() {
-            let encoded = urlencoding::encode(q_strip);
-            results.push(result_row(
-                format!("https://www.google.com/search?q={}", encoded),
-                format!("Search '{}' on the Web", q_strip),
-                "text/html".to_string(),
-                format!("Open Google search for '{}'", q_strip),
-                None,
-            ));
-        } else {
-            for (url, title) in [
-                ("https://www.google.com", "Google"),
-                ("https://github.com", "GitHub"),
-                ("https://youtube.com", "YouTube"),
-                ("https://wikipedia.org", "Wikipedia"),
-            ] {
-                results.push(result_row(url.to_string(), title.to_string(), "text/html".to_string(), url.to_string(), None));
-            }
-        }
-
-        results
-    }
-
-    pub fn search_apps(&self, query: &str, limit: usize) -> Vec<RowData> {
-        let q_lower = query.to_lowercase();
-        let apps = self.apps.borrow();
-        let mut results = Vec::new();
-
-        for app in apps.iter() {
-            if q_lower.is_empty()
-                || app.lower_name.contains(&q_lower)
-                || app.lower_comment.contains(&q_lower)
-                || app.lower_keywords.contains(&q_lower)
-                || app.filename.to_lowercase().contains(&q_lower)
-            {
-                results.push(result_row(
-                    format!("app://{}", app.filename),
-                    app.name.clone(),
-                    "application/x-desktop".to_string(),
-                    if !app.comment.is_empty() { app.comment.clone() } else { app.filename.clone() },
-                    Some(app.clone()),
-                ));
-
-                if results.len() >= limit {
-                    break;
-                }
-            }
-        }
-
-        results
-    }
-
-    pub fn search_async<F>(&self, query: &str, category: Category, limit: usize, callback: F)
-    where
-        F: Fn(Vec<RowData>) + 'static,
-    {
-        if matches!(category, Category::Applications | Category::Clipboard | Category::Web) {
-            gtk4::glib::idle_add_local(move || {
-                callback(Vec::new());
-                gtk4::glib::ControlFlow::Break
-            });
-            return;
-        }
-
-        let query = query.to_string();
-        run_async(JobKind::Files, move |ctx| search_nautilus(ctx, &query, category, limit), callback);
-    }
 }
 
 thread_local! {
@@ -253,29 +111,24 @@ thread_local! {
     static NEXT_JOB: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-/// Which stream a job belongs to. Only the newest queued job of each kind is worth running.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum JobKind {
-    Files,
-    History,
+/// Queues a provider job on the search worker; `callback` gets its rows, with file payloads,
+/// on the main thread.
+pub fn run_job<F>(job: ProviderJob, callback: F)
+where
+    F: FnOnce(Vec<RowData>) + 'static,
+{
+    let run = job.run;
+    run_async(job.kind, move |ctx| run(ctx).into_iter().map(file_data).collect(), callback);
 }
 
-/// State owned by the single worker thread, reused across jobs.
-#[derive(Default)]
-struct WorkerCtx {
-    session: Option<ZbusConnection>,
-    /// Read-only handles to each `places.sqlite`, opened on first use.
-    history_dbs: std::collections::HashMap<PathBuf, SqliteConnection>,
-}
-
-impl WorkerCtx {
-    /// The session bus connection: created once, kept until a call on it fails.
-    fn session(&mut self) -> Option<&ZbusConnection> {
-        if self.session.is_none() {
-            self.session = ZbusConnection::session().ok();
-        }
-        self.session.as_ref()
-    }
+/// A file or web row plus the payload that opens it.
+pub fn file_data(row: Row) -> RowData {
+    let mime = if row.id.starts_with("http") {
+        "text/html"
+    } else {
+        mime_guess::from_path(&row.title).first_raw().unwrap_or("application/octet-stream")
+    };
+    result_row(row.id, row.title, mime.to_string(), row.subtitle, None)
 }
 
 struct Job {
@@ -370,7 +223,7 @@ pub fn matches_category(filename: &str, category: Category) -> bool {
     }
 }
 
-fn search_nautilus(ctx: &mut WorkerCtx, query: &str, category: Category, limit: usize) -> Vec<RowData> {
+pub(crate) fn search_nautilus(ctx: &mut WorkerCtx, query: &str, category: Category, limit: usize) -> Vec<RowData> {
     let mut results = Vec::new();
     let q_trimmed = query.trim();
     if q_trimmed.is_empty() {
@@ -530,7 +383,7 @@ fn query_browser_history_plain(query: &str, limit: usize) -> Vec<RowData> {
     query_browser_history(&mut WorkerCtx::default(), query, limit)
 }
 
-fn query_browser_history(ctx: &mut WorkerCtx, query: &str, limit: usize) -> Vec<RowData> {
+pub(crate) fn query_browser_history(ctx: &mut WorkerCtx, query: &str, limit: usize) -> Vec<RowData> {
     let mut results = Vec::new();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 

@@ -6,6 +6,7 @@ mod config;
 mod control_service;
 mod core;
 mod search;
+mod search_providers;
 mod ui;
 mod utils;
 mod windows_client;

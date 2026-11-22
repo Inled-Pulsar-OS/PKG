@@ -19,7 +19,7 @@ impl Provider for Fake {
         self.ids.iter().map(|id| row(id, &format!("{}:{}", self.name, q.text))).collect()
     }
     fn background(&self, _q: &Query) -> Option<Job> {
-        self.job.then(|| Box::new(|| vec![row("late", "late")]) as Job)
+        self.job.then(|| Job { kind: JobKind::Files, title: "T", run: Box::new(|_| vec![row("late", "late")]) })
     }
 }
 
@@ -48,6 +48,8 @@ fn registry_keeps_registration_order_and_dedups_by_id() {
 fn registry_collects_only_providers_with_a_job() {
     let jobs = registry().background(&Query::new("q"));
     assert_eq!(jobs.len(), 1);
-    let rows = jobs.into_iter().next().unwrap()();
+    let job = jobs.into_iter().next().unwrap();
+    assert_eq!((job.kind, job.title), (JobKind::Files, "T"));
+    let rows = (job.run)(&mut WorkerCtx::default());
     assert_eq!(rows[0].id, "late");
 }

@@ -57,3 +57,4 @@ pub mod snippets;
 pub mod shortcuts;
 pub mod store;
 pub mod windows;
+pub mod worker;

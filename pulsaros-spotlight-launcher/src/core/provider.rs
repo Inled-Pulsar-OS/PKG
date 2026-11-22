@@ -6,6 +6,7 @@
 use std::collections::HashSet;
 
 use super::root_search::Row;
+use super::worker::{JobKind, WorkerCtx};
 
 /// One search request. `text` is `raw` trimmed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,8 +25,12 @@ impl Query {
     }
 }
 
-/// Slow work run off the UI thread; returns rows to merge in.
-pub type Job = Box<dyn FnOnce() -> Vec<Row> + Send>;
+/// Slow work run on the search worker; returns rows for the section `title`.
+pub struct Job {
+    pub kind: JobKind,
+    pub title: &'static str,
+    pub run: Box<dyn FnOnce(&mut WorkerCtx) -> Vec<Row> + Send>,
+}
 
 pub trait Provider {
     /// Stable name, used for logs and tests.

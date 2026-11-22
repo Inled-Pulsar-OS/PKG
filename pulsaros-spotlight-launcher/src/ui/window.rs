@@ -17,7 +17,8 @@ use crate::core::root_search::{AppEntry, Ctx, Row, RowKind, RootSearch, SearchIn
 use crate::core::settings::Settings;
 use crate::core::shortcuts::{self, Act, Mods};
 use crate::core::store::Store;
-use crate::search::{SearchBackend, DEFAULT_LIMIT};
+use crate::search::{file_data, run_job, SearchBackend};
+use crate::search_providers::{FilesProvider, HistoryProvider, WebProvider};
 use crate::ui::results::{get_favorites, result_row, set_favorites, Payload, ResultView, RowData};
 use crate::utils::{get_icon_dir, get_local_icon_dir, open_file};
 use gtk4::gdk;
@@ -1018,10 +1019,6 @@ impl SpotlightWindow {
                 let rows = self.clipboard_provider(usize::MAX).instant(&Query::new(&query));
                 vec![("Clipboard".to_string(), self.attach_all(rows, &None))]
             }
-            Category::Web => {
-                let rows = self.backend.search_web(&query);
-                vec![("Web".to_string(), rows)]
-            }
             Category::Calc => {
                 let calc_query = if is_empty { "1+1" } else { &query };
                 let mut rows = CalculatorProvider.instant(&Query::new(calc_query));
@@ -1031,31 +1028,26 @@ impl SpotlightWindow {
             }
             _ => Vec::new(),
         };
+        // Files, web and history decide for themselves whether the category and query apply.
+        let q = Query::new(&query);
+        let mut registry = Registry::default();
+        registry.register(Box::new(WebProvider::new(category)));
+        registry.register(Box::new(FilesProvider::new(category)));
+        registry.register(Box::new(HistoryProvider::new(category)));
+        let mut sections = sections;
+        let web = registry.instant(&q);
+        if !web.is_empty() {
+            sections.push(("Web".to_string(), web.into_iter().map(file_data).collect()));
+        }
         *self.current.borrow_mut() = sections;
         self.render(keep);
 
-        // Async Nautilus file search (appended to Results, or its own section)
-        let needs_files = (!is_empty || category.is_file_tab()) && category.needs_file_search();
-        let target = category.section_title();
-        if needs_files {
+        for job in registry.background(&q) {
             self.loading_begin();
-            let s = self.clone();
-            self.backend.search_async(&query, category, DEFAULT_LIMIT, move |file_results| {
+            let (s, title) = (self.clone(), job.title);
+            run_job(job, move |rows| {
                 s.loading_end();
-                s.append_rows(seq, target, file_results);
-            });
-        }
-
-        // Async browser history (web category, or web results within "all")
-        let wants_history = category == Category::Web || (category == Category::All && !is_empty);
-        if wants_history {
-            let limit = if category == Category::Web { 6 } else { 3 };
-            self.loading_begin();
-            let s = self.clone();
-            let title = if category == Category::Web { "Web" } else { "Results" };
-            self.backend.search_browser_history_async(&query, limit, move |hist| {
-                s.loading_end();
-                s.append_rows(seq, title, hist);
+                s.append_rows(seq, title, rows);
             });
         }
     }
