@@ -1,5 +1,5 @@
 use crate::core::root_search::{Row, RowKind};
-use crate::search::SearchResult;
+use crate::apps::DesktopApp;
 use crate::utils::get_file_icon;
 use gtk4::gdk;
 use gtk4::glib;
@@ -384,7 +384,7 @@ pub fn app_icon(icon: &str, desktop_file: &str) -> gtk4::Image {
     gtk4::Image::from_icon_name("application-x-executable")
 }
 
-pub fn result_icon(result: &SearchResult) -> gtk4::Image {
+pub fn result_icon(result: &Payload) -> gtk4::Image {
     if let Some(app) = &result.app {
         return app_icon(&app.icon, &app.filename);
     }
@@ -397,12 +397,33 @@ pub fn result_icon(result: &SearchResult) -> gtk4::Image {
 // Sectioned result list
 // ---------------------------------------------------------------------
 
-/// One displayed row: the core row plus the backend result it came from
+/// What a file, app, web or clipboard row opens: its target url, mime type and desktop app.
+#[derive(Clone, Debug)]
+pub struct Payload {
+    pub url: String,
+    pub mime: String,
+    pub app: Option<DesktopApp>,
+}
+
+/// Builds a backend row (file, web, clipboard, calculator hit) with its typed payload.
+pub fn result_row(url: String, title: String, mime: String, snippet: String, app: Option<DesktopApp>) -> RowData {
+    let (kind, id, icon) = if let Some(v) = url.strip_prefix("calc://") {
+        (RowKind::Calc, format!("calc:{v}"), "accessories-calculator-symbolic")
+    } else if url.starts_with("clipboard://") {
+        (RowKind::Clipboard, url.clone(), "edit-paste-symbolic")
+    } else {
+        (RowKind::File, url.clone(), "text-x-generic")
+    };
+    let sub = if snippet.is_empty() { url.trim_start_matches("file://").to_string() } else { snippet };
+    RowData { row: Row::simple(kind, &id, &title, &sub, icon), payload: Some(Payload { url, mime, app }), calc: None }
+}
+
+/// One displayed row: the core row plus the payload it opens
 /// (files, clipboard, calculator) so activation can reuse existing logic.
 #[derive(Clone, Debug)]
 pub struct RowData {
     pub row: Row,
-    pub payload: Option<SearchResult>,
+    pub payload: Option<Payload>,
     pub calc: Option<crate::calculator::CalcResult>,
 }
 

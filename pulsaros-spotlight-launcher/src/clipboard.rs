@@ -1,5 +1,5 @@
 use crate::config::SpotlightConfig;
-use crate::search::SearchResult;
+use crate::ui::results::{result_row, RowData};
 use gtk4::gdk;
 use gtk4::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -230,7 +230,7 @@ impl ClipboardManager {
         inner.items.get(index).map(|item| item.text.clone())
     }
 
-    pub fn search_history(&self, query: &str) -> Vec<SearchResult> {
+    pub fn search_history(&self, query: &str) -> Vec<RowData> {
         let items = self.get_items();
         let q_lower = query.trim().to_lowercase();
         let mut results = Vec::new();
@@ -248,13 +248,13 @@ impl ClipboardManager {
                     preview = preview.chars().take(97).collect::<String>() + "...";
                 }
 
-                results.push(SearchResult {
-                    url: format!("clipboard://{}", idx),
-                    title: first_line,
-                    mime: "text/plain-clipboard".to_string(),
-                    snippet: preview,
-                    app: None,
-                });
+                results.push(result_row(
+                    format!("clipboard://{}", idx),
+                    first_line,
+                    "text/plain-clipboard".to_string(),
+                    preview,
+                    None,
+                ));
             }
         }
 

@@ -1,13 +1,7 @@
 use super::*;
 
-fn file_result(title: &str) -> SearchResult {
-    SearchResult {
-        url: format!("file:///tmp/{title}"),
-        title: title.to_string(),
-        mime: String::new(),
-        snippet: String::new(),
-        app: None,
-    }
+fn file_result(title: &str) -> RowData {
+    result_row(format!("file:///tmp/{title}"), title.to_string(), String::new(), String::new(), None)
 }
 
 #[test]
@@ -18,7 +12,7 @@ fn order_file_results_puts_closest_title_first() {
         file_result("report.pdf"),
     ];
     order_file_results(&mut results, "report");
-    let titles: Vec<&str> = results.iter().map(|r| r.title.as_str()).collect();
+    let titles: Vec<&str> = results.iter().map(|r| r.row.title.as_str()).collect();
     assert_eq!(titles, ["report.pdf", "report-2024.pdf", "annual-report-draft-old.pdf"]);
 }
 
@@ -26,7 +20,7 @@ fn order_file_results_puts_closest_title_first() {
 fn order_file_results_keeps_input_order_for_equal_relevance() {
     let mut results = vec![file_result("zeta-report.txt"), file_result("alpha-report.txt")];
     order_file_results(&mut results, "report");
-    assert_eq!(results[0].title, "zeta-report.txt");
+    assert_eq!(results[0].row.title, "zeta-report.txt");
 }
 
 #[test]
@@ -67,7 +61,7 @@ fn run_async_delivers_result_on_the_main_context_without_polling() {
     let g = got.clone();
     run_async(
         JobKind::Files,
-        |_| vec![SearchResult { url: "u".into(), title: "t".into(), mime: "m".into(), snippet: "s".into(), app: None }],
+        |_| vec![result_row("u".into(), "t".into(), "m".into(), "s".into(), None)],
         move |r| g.set(Some(r.len())),
     );
     let start = std::time::Instant::now();

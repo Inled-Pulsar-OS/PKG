@@ -147,7 +147,7 @@ fn search_history_returns_clipboard_rows_for_matching_query() {
     mgr.record_clip("beta two");
     mgr.record_clip("alpha three");
     let rows = mgr.search_history("alpha");
-    let urls: Vec<&str> = rows.iter().map(|r| r.url.as_str()).collect();
+    let urls: Vec<&str> = rows.iter().map(|r| r.payload.as_ref().unwrap().url.as_str()).collect();
     assert_eq!(urls, vec!["clipboard://0", "clipboard://2"]);
-    assert!(rows.iter().all(|r| r.app.is_none()));
+    assert!(rows.iter().all(|r| r.payload.as_ref().unwrap().app.is_none()));
 }

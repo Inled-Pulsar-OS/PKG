@@ -2,15 +2,42 @@ use super::*;
 
 #[test]
 fn calc_result_becomes_calc_row() {
-    let r = row_from_result(&SearchResult {
-        url: "calc://4".into(),
-        title: "4".into(),
-        mime: "application/x-calculator".into(),
-        snippet: "2+2".into(),
-        app: None,
-    });
+    let r = result_row("calc://4".into(), "4".into(), "application/x-calculator".into(), "2+2".into(), None);
     assert_eq!(r.row.kind, RowKind::Calc);
     assert_eq!(primary_title(&r), "Copy Answer");
+}
+
+#[test]
+fn clipboard_result_keeps_payload_for_paste() {
+    let r = result_row("clipboard://3".into(), "hi".into(), "text/plain-clipboard".into(), "hi there".into(), None);
+    assert_eq!(r.row.kind, RowKind::Clipboard);
+    assert_eq!(r.row.id, "clipboard://3");
+    assert_eq!(r.payload.unwrap().url, "clipboard://3");
+}
+
+#[test]
+fn file_and_folder_results_keep_url_and_mime() {
+    let f = result_row("file:///tmp/a.txt".into(), "a.txt".into(), "text/plain".into(), String::new(), None);
+    assert_eq!(f.row.kind, RowKind::File);
+    assert_eq!(f.row.subtitle, "/tmp/a.txt");
+    assert_eq!(primary_title(&f), "Open");
+    let d = result_row("file:///tmp".into(), "tmp".into(), "inode/directory".into(), "/tmp".into(), None);
+    assert_eq!(primary_title(&d), "Open Folder");
+    assert_eq!(d.payload.unwrap().mime, "inode/directory");
+}
+
+#[test]
+fn history_and_web_results_open_in_browser() {
+    let h = result_row("https://a.test".into(), "A".into(), "text/html".into(), "https://a.test".into(), None);
+    assert_eq!(h.row.kind, RowKind::File);
+    assert_eq!(primary_title(&h), "Open in Browser");
+    assert_eq!(h.payload.unwrap().url, "https://a.test");
+}
+
+#[test]
+fn app_result_carries_its_desktop_url() {
+    let a = result_row("app://foo.desktop".into(), "Foo".into(), "application/x-desktop".into(), "foo".into(), None);
+    assert_eq!(a.payload.unwrap().url, "app://foo.desktop");
 }
 
 #[test]
