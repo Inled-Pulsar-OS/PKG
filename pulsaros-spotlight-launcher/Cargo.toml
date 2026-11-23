@@ -6,7 +6,7 @@ authors = ["Jaime <info@inled.es>"]
 license = "GPL-3.0-or-later"
 
 [dependencies]
-gtk4 = { version = "0.9", features = ["v4_12"] }
+gtk4 = { version = "0.9" }
 adw = { version = "0.7", package = "libadwaita" }
 gdk-pixbuf = { version = "0.20" }
 zbus = { version = "4.4" }
