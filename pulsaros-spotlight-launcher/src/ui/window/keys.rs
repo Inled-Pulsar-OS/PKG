@@ -96,8 +96,11 @@ impl SpotlightWindow {
             }
         }
 
-        // Typing while a list row has focus: redirect into the search entry
-        if !self.search_entry.has_focus() && !self.arg_has_focus() && !mods.ctrl && !mods.alt && !state.contains(gdk::ModifierType::SUPER_MASK) {
+        // Typing while a list row has focus: redirect into the search entry.
+        // `Entry::has_focus` is false while its inner text widget holds focus, so ask the delegate too;
+        // otherwise typing over a selection appends instead of replacing it.
+        let entry_focused = self.search_entry.has_focus() || self.search_entry.delegate().is_some_and(|d| d.has_focus());
+        if !entry_focused && !self.arg_has_focus() && !mods.ctrl && !mods.alt && !state.contains(gdk::ModifierType::SUPER_MASK) {
             if let Some(ch) = keyval.to_unicode() {
                 if ch.is_alphanumeric() || ch.is_ascii_punctuation() || ch == ' ' {
                     self.search_entry.grab_focus();
