@@ -95,6 +95,7 @@ fn main() -> gtk4::glib::ExitCode {
     let hold_guard_cell_c = hold_guard_cell.clone();
     app.connect_activate(move |app| {
         let is_hidden = std::env::args().any(|arg| arg == "--hidden");
+        let first_activation = window_cell_c.borrow().is_none();
 
         let mut win_borrow = window_cell_c.borrow_mut();
         if win_borrow.is_none() {
@@ -158,15 +159,14 @@ fn main() -> gtk4::glib::ExitCode {
             *win_borrow = Some(spotlight_win);
         }
 
-        if !is_hidden {
-            if let Some(win) = win_borrow.as_ref() {
-                win.present_with_focus();
-            }
-        } else {
-            // Under GTK/gio, to prevent app from exiting immediately when hidden is passed,
-            // we hold the application.
+        if first_activation && is_hidden {
+            // Keep the hidden instance alive. Later activations must still present the
+            // window: the primary process keeps its original --hidden argv, so re-reading
+            // args here would leave every future activation invisible.
             let guard = app.hold();
             *hold_guard_cell_c.borrow_mut() = Some(guard);
+        } else if let Some(win) = win_borrow.as_ref() {
+            win.present_with_focus();
         }
     });
 

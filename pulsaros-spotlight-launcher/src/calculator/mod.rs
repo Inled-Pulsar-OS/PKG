@@ -780,7 +780,8 @@ impl<'a> Parser<'a> {
                     return Ok(Val::num(match k.as_str() {
                         "pi" => std::f64::consts::PI,
                         "tau" => std::f64::consts::TAU,
-                        "phi" => std::f64::consts::GOLDEN_RATIO,
+                        // Kept as a literal for the older Rust in Debian trixie.
+                        "phi" => 1.618_033_988_749_895,
                         _ => std::f64::consts::E,
                     }));
                 }
