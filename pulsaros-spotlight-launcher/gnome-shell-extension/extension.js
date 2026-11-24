@@ -156,6 +156,8 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
         this._winRegistrationId = 0;
         this._winNameId = 0;
         this._capturedEventId = 0;
+        this._spotlightSignals = new Map();
+        this._recenterTimeoutId = 0;
 
         // Initialize virtual keyboard device for injecting keystrokes into any Wayland window
         try {
@@ -350,6 +352,17 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
             this._winNameId = 0;
         }
 
+        if (this._recenterTimeoutId) {
+            GLib.source_remove(this._recenterTimeoutId);
+            this._recenterTimeoutId = 0;
+        }
+        for (const [win, ids] of this._spotlightSignals) {
+            try {
+                win.disconnect(ids.sizeId);
+                win.disconnect(ids.unmanagedId);
+            } catch (e) { /* window already gone */ }
+        }
+        this._spotlightSignals.clear();
         this._virtualKeyboard = null;
     }
 
@@ -493,12 +506,50 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
                 win.make_above();
                 win.stick();
                 this._applyHardwareBlur(win);
+                this._watchSpotlightSize(win);
+                this._scheduleSpotlightRecenter(win);
                 Main.activateWindow(win);
                 win.activate(global.get_current_time());
             } catch (e) {
                 console.error('[SpotlightLauncher] Error raising spotlight window:', e);
             }
         }
+    }
+
+    /** Re-center the expanded panel once its grow/shrink animation has settled. */
+    _watchSpotlightSize(win) {
+        if (this._spotlightSignals.has(win)) return;
+        const sizeId = win.connect('size-changed', () => this._scheduleSpotlightRecenter(win));
+        const unmanagedId = win.connect('unmanaged', () => {
+            try {
+                win.disconnect(sizeId);
+                win.disconnect(unmanagedId);
+            } catch (e) { /* already disconnected */ }
+            this._spotlightSignals.delete(win);
+        });
+        this._spotlightSignals.set(win, { sizeId, unmanagedId });
+    }
+
+    _scheduleSpotlightRecenter(win) {
+        if (this._recenterTimeoutId) GLib.source_remove(this._recenterTimeoutId);
+        this._recenterTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 240, () => {
+            this._recenterTimeoutId = 0;
+            this._centerSpotlight(win);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _centerSpotlight(win) {
+        if (!win || !this._isSpotlightWindow(win)) return;
+        const rect = win.get_frame_rect();
+        // Keep the idle pill where it is; center only the expanded panel.
+        if (!rect || rect.height < 140) return;
+        const area = win.get_work_area_current_monitor();
+        if (!area) return;
+        const x = area.x + Math.max(0, Math.floor((area.width - rect.width) / 2));
+        const y = area.y + Math.max(0, Math.floor((area.height - rect.height) / 2));
+        if (rect.x === x && rect.y === y) return;
+        win.move_frame(true, x, y);
     }
 
     _launchSpotlight() {
