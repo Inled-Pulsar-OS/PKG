@@ -48,7 +48,7 @@ package() {
     install -Dm755 cli/pulsaros-toggle-launcher "$pkgdir/usr/bin/pulsaros-toggle-launcher"
 
     local _css
-    for _css in base dark light liquid-glass index; do
+    for _css in base dark light liquid-glass idle index; do
         install -Dm644 "data/$_css.css" "$pkgdir/usr/share/pulsaros-spotlight/$_css.css"
     done
     install -d "$pkgdir/usr/share/pulsaros-spotlight/icons"
