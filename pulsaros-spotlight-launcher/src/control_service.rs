@@ -6,7 +6,7 @@
 //! This is intentionally one method and no extra state: the extension decides "that click was
 //! outside," and this service just forwards the fact to the GTK main thread, which still makes
 //! the actual hide/keep-open decision (see `SpotlightWindow::handle_outside_click`).
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
 
 use zbus::interface;
 
@@ -14,7 +14,8 @@ pub const NAME: &str = "es.inled.PulsarosSpotlight.Control";
 const PATH: &str = "/es/inled/PulsarosSpotlight/Control";
 
 struct ControlIface {
-    hide_tx: Sender<()>,
+    on_hide: Arc<dyn Fn() + Send + Sync>,
+    on_pointer: Arc<dyn Fn(f64, f64) + Send + Sync>,
 }
 
 #[interface(name = "es.inled.PulsarosSpotlight.Control")]
@@ -22,21 +23,29 @@ impl ControlIface {
     /// Called by the Shell extension when a pointer press lands outside the Spotlight
     /// window's current bounds while it's visible.
     fn hide(&self) {
-        let _ = self.hide_tx.send(());
+        (self.on_hide)();
+    }
+
+    /// Called by the Shell extension for pointer motion anywhere on the screen (global
+    /// coordinates) while the Spotlight window is visible. A regular window only sees the
+    /// pointer over itself, so the compositor reports the rest.
+    fn pointer_moved(&self, x: f64, y: f64) {
+        (self.on_pointer)(x, y);
     }
 }
 
-/// Starts the control service on a background thread and returns the receiving end of a
-/// channel that fires once per `Hide` call. GTK widgets aren't thread-safe, so the receiver
-/// is meant to be polled from the main thread (e.g. via `glib::timeout_add_local`), same
-/// pattern as `SpotlightWindow::check_indexing_status`'s mpsc channel.
+/// Starts the control service on a background thread. `on_hide` runs on that thread once per
+/// `Hide` call, so it must only hand the fact to the GTK main thread (e.g. through
+/// `glib::MainContext::invoke`) and never touch widgets itself. No polling: the main loop is
+/// woken only when a call arrives.
 ///
 /// Failures (no session bus, name already owned, etc.) are logged and degrade to "the
 /// click-outside path never fires" rather than crashing the launcher.
-pub fn spawn() -> Receiver<()> {
-    let (tx, rx) = channel();
+pub fn spawn(on_hide: impl Fn() + Send + Sync + 'static, on_pointer: impl Fn(f64, f64) + Send + Sync + 'static) {
+    let on_hide: Arc<dyn Fn() + Send + Sync> = Arc::new(on_hide);
+    let on_pointer: Arc<dyn Fn(f64, f64) + Send + Sync> = Arc::new(on_pointer);
     std::thread::spawn(move || {
-        let iface = ControlIface { hide_tx: tx };
+        let iface = ControlIface { on_hide, on_pointer };
         let conn = match zbus::blocking::Connection::session() {
             Ok(c) => c,
             Err(e) => {
@@ -59,5 +68,8 @@ pub fn spawn() -> Receiver<()> {
             std::thread::park();
         }
     });
-    rx
 }
+
+#[cfg(test)]
+#[path = "tests/control_service_tests.rs"]
+mod tests;

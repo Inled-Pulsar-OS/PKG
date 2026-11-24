@@ -377,6 +377,10 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
      * routed through its one existing hide path (see control_service.rs / window.rs).
      */
     _onCapturedEvent(event) {
+        if (event.type() === Clutter.EventType.MOTION) {
+            this._reportPointer(event);
+            return;
+        }
         if (event.type() !== Clutter.EventType.BUTTON_PRESS) return;
 
         const win = this._findVisibleSpotlightWindow();
@@ -386,6 +390,30 @@ export default class PulsarosSpotlightLauncherExtension extends Extension {
         const [x, y] = event.get_coords();
         if (isPointOutsideRect(x, y, rect)) {
             this._requestHide();
+        }
+    }
+
+    /**
+     * Reports pointer motion anywhere on the screen to the Rust binary (global coordinates), so
+     * the idle bar can reveal its mode buttons when the pointer moves over any app. Throttled to
+     * one call per 50 ms and only while a Spotlight window is on screen.
+     */
+    _reportPointer(event) {
+        const now = GLib.get_monotonic_time();
+        if (this._lastPointerReport && now - this._lastPointerReport < 50000) return;
+        if (!this._findVisibleSpotlightWindow()) return;
+        this._lastPointerReport = now;
+        const [x, y] = event.get_coords();
+        try {
+            Gio.DBus.session.call(
+                CONTROL_NAME, CONTROL_PATH, CONTROL_NAME, 'PointerMoved',
+                new GLib.Variant('(dd)', [x, y]), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null,
+                (connection, res) => {
+                    try { connection.call_finish(res); } catch (e) { /* binary not running */ }
+                }
+            );
+        } catch (e) {
+            console.error('[SpotlightLauncher] Failed to report pointer:', e);
         }
     }
 

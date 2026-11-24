@@ -3,19 +3,13 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct DesktopApp {
     pub name: String,
-    pub exec: String,
     pub icon: String,
     pub comment: String,
-    pub categories: String,
     pub filename: String,
-    pub lower_name: String,
-    pub lower_comment: String,
     pub keywords: String,
-    pub lower_keywords: String,
 }
 
 pub fn get_desktop_dirs() -> Vec<PathBuf> {
@@ -107,7 +101,6 @@ pub fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
     let mut hidden = None;
     let mut exec = None;
     let mut icon = None;
-    let mut categories = None;
 
     let mut names: HashMap<String, String> = HashMap::new();
     let mut generic_names: HashMap<String, String> = HashMap::new();
@@ -142,8 +135,6 @@ pub fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
                     exec = Some(value.to_string());
                 } else if key == "Icon" {
                     icon = Some(value.to_string());
-                } else if key == "Categories" {
-                    categories = Some(value.to_string());
                 } else if key == "Name" {
                     names.insert("".to_string(), value.to_string());
                 } else if key.starts_with("Name[") && key.ends_with(']') {
@@ -187,24 +178,16 @@ pub fn parse_desktop_file(path: &Path) -> Option<DesktopApp> {
         return None;
     }
 
-    let exec = exec?;
-    if exec.is_empty() {
-        return None;
-    }
+    exec.filter(|e| !e.is_empty())?;
 
     let comment = pick_localized(&comments, &locales).unwrap_or_default();
     let keywords = pick_localized(&keywords_map, &locales).unwrap_or_default();
 
     Some(DesktopApp {
-        lower_name: name.to_lowercase(),
-        lower_comment: comment.to_lowercase(),
-        lower_keywords: keywords.to_lowercase(),
         name,
-        exec,
         icon: icon.unwrap_or_else(|| "application-x-executable".to_string()),
         comment,
         keywords,
-        categories: categories.unwrap_or_default(),
         filename: path.file_name()?.to_string_lossy().into_owned(),
     })
 }
@@ -221,7 +204,7 @@ pub fn load_apps() -> Vec<DesktopApp> {
             let mut paths: Vec<_> = entries
                 .filter_map(Result::ok)
                 .map(|e| e.path())
-                .filter(|p| p.extension().map_or(false, |ext| ext == "desktop"))
+                .filter(|p| p.extension().is_some_and(|ext| ext == "desktop"))
                 .collect();
             paths.sort();
 
@@ -372,19 +355,13 @@ fn parse_mac_app(path: &Path) -> Option<DesktopApp> {
         icon_path = "application-x-executable".to_string();
     }
 
-    let exec = format!("pulsar-appexec \"{}\"", path.display());
     let comment = "macOS Application".to_string();
 
     Some(DesktopApp {
-        lower_name: display_name.to_lowercase(),
-        lower_comment: comment.to_lowercase(),
-        lower_keywords: clean_name.to_lowercase(),
         name: display_name,
-        exec,
         icon: icon_path,
         comment,
         keywords: format!("macos apple app {}", clean_name),
-        categories: "macOS;Utility;Application;".to_string(),
         filename: folder_name.to_string(),
     })
 }

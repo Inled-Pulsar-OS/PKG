@@ -3,6 +3,7 @@
 use super::dates::{civil_from_days, days_from_civil, fmt_clock, fmt_date, month_len, weekday};
 use super::{CalcResult, Ctx};
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Rule {
@@ -68,17 +69,15 @@ const ZONES: &[Zone] = &[
     z!("st johns,newfoundland", "St. John's", -210, Us, "NST", "NDT"),
 ];
 
-lazy_static::lazy_static! {
-    static ref INDEX: HashMap<&'static str, usize> = {
-        let mut m = HashMap::new();
-        for (i, z) in ZONES.iter().enumerate() {
-            for n in z.names.split(',') {
-                m.entry(n).or_insert(i);
-            }
+static INDEX: LazyLock<HashMap<&'static str, usize>> = LazyLock::new(|| {
+    let mut m = HashMap::new();
+    for (i, z) in ZONES.iter().enumerate() {
+        for n in z.names.split(',') {
+            m.entry(n).or_insert(i);
         }
-        m
-    };
-}
+    }
+    m
+});
 
 fn last_sunday(y: i64, m: i64) -> i64 {
     let last = days_from_civil(y, m, month_len(y, m));

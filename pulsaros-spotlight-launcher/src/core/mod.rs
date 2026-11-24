@@ -33,14 +33,22 @@
 //!   `Outcome::{Selected(s),Cancelled}` with `exit_code()` (0/1) and `stdout()`.
 //! - `windows`: `WindowEntry{id,title,wm_class,app_id,workspace}`, `rank(q,&wins,&frecency,now)`,
 //!   `to_row`/`rows(..)` give `Row`s with id `window:<id>` and actions `window_activate`/`window_close`.
-#![allow(dead_code)]
 
+pub mod apps_provider;
+pub mod calc_provider;
+pub mod clipboard_provider;
 pub mod commands;
+pub mod commands_provider;
+pub mod debounce;
 pub mod emoji;
 pub mod dmenu;
 pub mod frecency;
+pub mod layout;
+pub mod nav;
+pub mod provider;
 pub mod quicklinks;
 pub mod ranker;
+pub mod root_run;
 pub mod root_search;
 pub mod script_commands;
 pub mod settings;
@@ -48,3 +56,4 @@ pub mod snippets;
 pub mod shortcuts;
 pub mod store;
 pub mod windows;
+pub mod worker;

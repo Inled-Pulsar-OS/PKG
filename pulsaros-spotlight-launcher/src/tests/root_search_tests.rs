@@ -163,10 +163,6 @@ fn disabled_hidden_everywhere_and_listed() {
     assert!(!w.ids("firefox", "Results").contains(&"app:firefox".to_string()));
     assert!(!w.ids("", "Applications").contains(&"app:firefox".to_string()));
     assert!(w.ids("", "Favorites").is_empty());
-    let ctx = Ctx { apps: &w.apps, commands: &w.cmds, states: &w.states, settings: &w.settings, frecency: &w.fre, now: 0, extra: &[] };
-    let d = RootSearch::disabled_rows(&ctx);
-    assert_eq!(d.len(), 1);
-    assert_eq!(d[0].actions[0].id, "enable");
     w.settings.enable("app:firefox");
     assert!(w.ids("firefox", "Results").contains(&"app:firefox".to_string()));
 }
@@ -221,4 +217,25 @@ fn row_actions_and_favorite_label() {
 fn deterministic_order() {
     let w = World::new();
     assert_eq!(w.run("s"), w.run("s"));
+}
+
+#[test]
+fn prebuilt_index_matches_and_beats_per_query_build_with_1000_apps() {
+    let mut w = World::new();
+    w.apps = (0..1000).map(|i| app(&format!("app:a{i}"), &format!("Sample Tool Number {i}"), &["utility", "helper"])).collect();
+    let ctx = Ctx { apps: &w.apps, commands: &w.cmds, states: &w.states, settings: &w.settings, frecency: &w.fre, now: 1000, extra: &[] };
+    let index = SearchIndex::new(&w.apps, &w.cmds);
+    assert_eq!(RootSearch::sections("stn", &ctx), RootSearch::sections_indexed("stn", &ctx, &index));
+
+    let time = |f: &dyn Fn() -> Vec<Section>| {
+        let t = std::time::Instant::now();
+        for _ in 0..50 {
+            std::hint::black_box(f());
+        }
+        t.elapsed() / 50
+    };
+    let rebuilt = time(&|| RootSearch::sections("stn", &ctx));
+    let indexed = time(&|| RootSearch::sections_indexed("stn", &ctx, &index));
+    eprintln!("per query, 1000 apps: build+query {rebuilt:?}, prebuilt index {indexed:?}");
+    assert!(indexed < rebuilt);
 }

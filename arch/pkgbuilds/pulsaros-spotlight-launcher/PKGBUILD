@@ -1,13 +1,13 @@
 # Maintainer: Jaime <info@inled.es>
 pkgname=pulsaros-spotlight-launcher
-pkgver=2.0.35
+pkgver=2.0.44
 pkgrel=1
 pkgdesc="Spotlight search for Pulsar OS"
 arch=(x86_64 aarch64)
 url="https://inled.es"
 license=(GPL-3.0-or-later)
 install=pulsaros-spotlight-launcher.install
-depends=(gtk4 libadwaita glib2 sqlite json-glib curl wl-clipboard gnome-shell)
+depends=(gtk4 libadwaita glib2 sqlite json-glib curl wl-clipboard gnome-shell nautilus python)
 makedepends=(cargo pkgconf)
 optdepends=(
     'ydotool: paste fallback when the Shell extension is unavailable'
@@ -48,7 +48,7 @@ package() {
     install -Dm755 cli/pulsaros-toggle-launcher "$pkgdir/usr/bin/pulsaros-toggle-launcher"
 
     local _css
-    for _css in base dark light liquid-glass index; do
+    for _css in base dark light liquid-glass idle index; do
         install -Dm644 "data/$_css.css" "$pkgdir/usr/share/pulsaros-spotlight/$_css.css"
     done
     install -d "$pkgdir/usr/share/pulsaros-spotlight/icons"
@@ -65,7 +65,10 @@ package() {
     local _ext="$pkgdir/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es"
     install -d "$_ext"
     cp -r gnome-shell-extension/. "$_ext/"
-    
-    find "$_ext" -type f -exec chmod 644 {} +
-    find "$_ext" -type d -exec chmod 755 {} +
+
+    local _tree
+    for _tree in "$_ext" "$pkgdir/usr/share/pulsaros-spotlight/icons"; do
+        find "$_tree" -type f -exec chmod 644 {} +
+        find "$_tree" -type d -exec chmod 755 {} +
+    done
 }

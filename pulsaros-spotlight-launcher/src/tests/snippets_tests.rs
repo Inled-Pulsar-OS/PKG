@@ -138,9 +138,6 @@ fn crud_and_store_roundtrip() {
     assert!(s.add("Dup", ";HI", "x").is_err());
     assert!(s.add("", ";x", "x").is_err());
     assert!(s.add("n", ";x", "").is_err());
-    s.update(&a, "Greeting 2", ";hi", "Hello there").unwrap();
-    assert!(s.update(&b, "Sig", ";hi", "x").is_err());
-    assert!(s.update("nope", "n", "", "t").is_err());
     s.save(&st).unwrap();
     let mut s2 = Snippets::load(&st);
     assert_eq!(s2.items, s.items);

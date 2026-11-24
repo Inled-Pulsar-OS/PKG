@@ -1,5 +1,4 @@
 use crate::config::SpotlightConfig;
-use crate::search::SearchResult;
 use gtk4::gdk;
 use gtk4::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -7,7 +6,13 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
+
+/// Quiet period after a copy before history is written; copies inside it share one write.
+const SAVE_DELAY: Duration = Duration::from_millis(1500);
+/// Largest clipboard entry kept in history; longer text is cut on a char boundary.
+pub const MAX_ITEM_BYTES: usize = 64 * 1024;
+const SECRET_HINT_MIME: &str = "x-kde-passwordManagerHint";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClipboardItem {
@@ -18,6 +23,10 @@ pub struct ClipboardItem {
 #[derive(Clone)]
 pub struct ClipboardManager {
     inner: Arc<Mutex<ClipboardManagerInner>>,
+    /// Serializes disk writes so the worker thread and a shutdown flush never share the temp file.
+    write_lock: Arc<Mutex<()>>,
+    #[cfg(test)]
+    writes: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 struct ClipboardManagerInner {
@@ -26,6 +35,10 @@ struct ClipboardManagerInner {
     /// Resolved data directory for this session; `None` means the platform
     /// data-directory lookup failed, so history stays in-memory only.
     data_dir: Option<PathBuf>,
+    /// History changed since the last write.
+    dirty: bool,
+    /// A delayed save thread is already waiting.
+    save_pending: bool,
 }
 
 impl ClipboardManager {
@@ -68,33 +81,112 @@ impl ClipboardManager {
             }
         }
 
-        let inner = Arc::new(Mutex::new(ClipboardManagerInner { items, config, data_dir: dir }));
-        Self { inner }
-    }
-
-    pub fn save(&self) {
-        let inner = self.inner.lock().unwrap();
-        let Some(dir) = inner.data_dir.clone() else { return };
-        let _ = fs::create_dir_all(&dir);
-        let file = Self::clipboard_file_in(&dir);
-        if let Ok(content) = serde_json::to_string_pretty(&inner.items) {
-            if fs::write(&file, content).is_ok() {
-                Self::set_owner_only_permissions(&file);
-            }
+        let inner = Arc::new(Mutex::new(ClipboardManagerInner {
+            items,
+            config,
+            data_dir: dir,
+            dirty: false,
+            save_pending: false,
+        }));
+        Self {
+            inner,
+            write_lock: Arc::new(Mutex::new(())),
+            #[cfg(test)]
+            writes: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }
     }
 
-    /// Locks the clipboard-history file to owner read/write only (0600),
-    /// regardless of the process umask, so other local accounts can't read it.
-    fn set_owner_only_permissions(path: &std::path::Path) {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    /// Writes the history now, whether or not it is dirty.
+    pub fn save(&self) {
+        let _guard = self.write_lock.lock().unwrap();
+        let (dir, content) = {
+            let mut inner = self.inner.lock().unwrap();
+            let Some(dir) = inner.data_dir.clone() else { return };
+            let Ok(content) = serde_json::to_string(&inner.items) else { return };
+            inner.dirty = false;
+            (dir, content)
+        };
+        if Self::ensure_private_dir(&dir).is_err() {
+            return;
+        }
+        #[cfg(test)]
+        self.writes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _ = Self::write_private(&Self::clipboard_file_in(&dir), content.as_bytes());
+    }
+
+    /// Writes the history only if it changed since the last write. Call on shutdown.
+    pub fn flush(&self) {
+        if self.inner.lock().unwrap().dirty {
+            self.save();
+        }
+    }
+
+    /// Marks history dirty and, unless a worker is already waiting, starts one that
+    /// writes it after `delay`.
+    fn schedule_save(&self, delay: Duration) {
+        {
+            let mut inner = self.inner.lock().unwrap();
+            inner.dirty = true;
+            if inner.save_pending {
+                return;
+            }
+            inner.save_pending = true;
+        }
+        let mgr = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(delay);
+            mgr.inner.lock().unwrap().save_pending = false;
+            mgr.flush();
+        });
+    }
+
+    /// Creates `dir` (and parents) and locks it to 0700, so other local accounts
+    /// can't list or traverse it, whatever the umask or a previous version left.
+    fn ensure_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o700))
+    }
+
+    /// Writes `bytes` to a 0600 temp file created with that mode (never readable by
+    /// others, even briefly) and renames it over `path`, which also tightens a
+    /// pre-existing looser file.
+    fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let tmp = path.with_extension("json.tmp");
+        let _ = fs::remove_file(&tmp);
+        let mut f = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp)?;
+        f.write_all(bytes)?;
+        drop(f);
+        fs::rename(&tmp, path)
+    }
+
+    /// True when the clipboard offer marks its content as secret (password managers set
+    /// `x-kde-passwordManagerHint`), so history must not record it.
+    pub fn has_secret_hint<S: AsRef<str>>(mime_types: &[S]) -> bool {
+        mime_types.iter().any(|m| m.as_ref() == SECRET_HINT_MIME)
+    }
+
+    /// Records `text` unless the offer's mime types flag it as a secret.
+    pub fn record_clip_with_formats<S: AsRef<str>>(&self, text: &str, mime_types: &[S]) {
+        if Self::has_secret_hint(mime_types) {
+            return;
+        }
+        self.record_clip(text);
     }
 
     pub fn record_clip(&self, text: &str) {
-        let clean = text.trim();
+        let mut clean = text.trim();
         if clean.is_empty() {
             return;
+        }
+        if clean.len() > MAX_ITEM_BYTES {
+            let mut end = MAX_ITEM_BYTES;
+            while !clean.is_char_boundary(end) {
+                end -= 1;
+            }
+            clean = &clean[..end];
         }
 
         let mut inner = self.inner.lock().unwrap();
@@ -124,9 +216,8 @@ impl ClipboardManager {
             inner.items.truncate(max_items);
         }
 
-        // Save immediately
         drop(inner);
-        self.save();
+        self.schedule_save(SAVE_DELAY);
     }
 
     pub fn get_items(&self) -> Vec<ClipboardItem> {
@@ -136,37 +227,6 @@ impl ClipboardManager {
     pub fn get_clip_by_index(&self, index: usize) -> Option<String> {
         let inner = self.inner.lock().unwrap();
         inner.items.get(index).map(|item| item.text.clone())
-    }
-
-    pub fn search_history(&self, query: &str) -> Vec<SearchResult> {
-        let items = self.get_items();
-        let q_lower = query.trim().to_lowercase();
-        let mut results = Vec::new();
-
-        for (idx, item) in items.iter().enumerate() {
-            if q_lower.is_empty() || item.text.to_lowercase().contains(&q_lower) {
-                let lines: Vec<&str> = item.text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
-                let mut first_line = lines.first().copied().unwrap_or(&item.text).to_string();
-                if first_line.chars().count() > 60 {
-                    first_line = first_line.chars().take(57).collect::<String>() + "...";
-                }
-
-                let mut preview = item.text.replace('\n', " ⏎ ");
-                if preview.chars().count() > 100 {
-                    preview = preview.chars().take(97).collect::<String>() + "...";
-                }
-
-                results.push(SearchResult {
-                    url: format!("clipboard://{}", idx),
-                    title: first_line,
-                    mime: "text/plain-clipboard".to_string(),
-                    snippet: preview,
-                    app: None,
-                });
-            }
-        }
-
-        results
     }
 
     pub fn paste_clip(&self, text: &str) {
@@ -219,7 +279,7 @@ impl ClipboardManager {
             let uid = unsafe { libc::getuid() };
             let sock = format!("/run/user/{}/.ydotool_socket", uid);
             let mut cmd = Command::new(path);
-            cmd.args(&["key", "29:1", "47:1", "47:0", "29:0"]);
+            cmd.args(["key", "29:1", "47:1", "47:0", "29:0"]);
             if std::path::Path::new(&sock).exists() {
                 cmd.env("YDOTOOL_SOCKET", sock);
             }
@@ -246,7 +306,7 @@ impl ClipboardManager {
         // 3. Fallback: xdotool
         if let Some(path) = which("xdotool") {
             let _ = Command::new(path)
-                .args(&["key", "ctrl+v"])
+                .args(["key", "ctrl+v"])
                 .spawn();
         }
     }

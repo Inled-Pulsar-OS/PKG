@@ -88,11 +88,6 @@ impl Outcome {
     }
 }
 
-/// Non-interactive check used before the GTK window exists: no items means nothing to pick.
-pub fn run_headless_check(items: &[String]) -> Option<Outcome> {
-    items.is_empty().then_some(Outcome::Cancelled)
-}
-
 #[cfg(test)]
 #[path = "../tests/dmenu_tests.rs"]
 mod tests;

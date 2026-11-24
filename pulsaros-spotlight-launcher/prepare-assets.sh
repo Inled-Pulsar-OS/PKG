@@ -68,6 +68,7 @@ install -m 644 data/base.css "$STAGE_DIR/usr/share/pulsaros-spotlight/base.css"
 install -m 644 data/dark.css "$STAGE_DIR/usr/share/pulsaros-spotlight/dark.css"
 install -m 644 data/light.css "$STAGE_DIR/usr/share/pulsaros-spotlight/light.css"
 install -m 644 data/liquid-glass.css "$STAGE_DIR/usr/share/pulsaros-spotlight/liquid-glass.css"
+install -m 644 data/idle.css "$STAGE_DIR/usr/share/pulsaros-spotlight/idle.css"
 install -m 644 data/index.css "$STAGE_DIR/usr/share/pulsaros-spotlight/index.css"
 
 # Install Icons
@@ -84,6 +85,12 @@ install -m 644 data/icons/spotlight-symbolic.svg "$STAGE_DIR/usr/share/icons/hic
 EXT_DIR="$STAGE_DIR/usr/share/gnome-shell/extensions/pulsaros-spotlight-launcher@inled.es"
 mkdir -p "$EXT_DIR"
 cp -r gnome-shell-extension/* "$EXT_DIR/"
+
+# Normalize modes: cp -r keeps source modes, so umask or a 750 source file leaks into the package
+for _tree in "$EXT_DIR" "$STAGE_DIR/usr/share/pulsaros-spotlight/icons"; do
+    find "$_tree" -type f -exec chmod 644 {} +
+    find "$_tree" -type d -exec chmod 755 {} +
+done
 
 # Remove staging build remnants and cache
 rm -rf "$STAGE_DIR/src" "$STAGE_DIR/cli" "$STAGE_DIR/data" "$STAGE_DIR/gnome-shell-extension" "$STAGE_DIR/pyproject.toml" "$STAGE_DIR/usr/share/pulsaros-spotlight-launcher" "$STAGE_DIR/build" "$STAGE_DIR/dist" "$STAGE_DIR"/*.egg-info "$STAGE_DIR/.gitignore" "$STAGE_DIR/target" "$STAGE_DIR/Cargo.lock" "$STAGE_DIR/Cargo.toml" "$STAGE_DIR/src_python"

@@ -1,10 +1,12 @@
 mod apps;
 mod calculator;
+mod category;
 mod clipboard;
 mod config;
 mod control_service;
 mod core;
 mod search;
+mod search_providers;
 mod ui;
 mod utils;
 mod windows_client;
@@ -60,6 +62,11 @@ fn load_css() {
     }
 }
 
+thread_local! {
+    /// The window the click-outside D-Bus call should hide; set on the GTK main thread.
+    static HIDE_WIN: RefCell<Option<Rc<SpotlightWindow>>> = const { RefCell::new(None) };
+}
+
 fn main() -> gtk4::glib::ExitCode {
     // dmenu mode never touches the normal single-instance app. The GTK window is wired separately.
     let argv: Vec<String> = std::env::args().collect();
@@ -103,15 +110,20 @@ fn main() -> gtk4::glib::ExitCode {
             let clipboard_mgr = ClipboardManager::new(config.clone());
             let backend = SearchBackend::new(Some(clipboard_mgr.clone()));
 
+            // A pending debounced history write must not be lost on a normal quit.
+            let flush_mgr = clipboard_mgr.clone();
+            app.connect_shutdown(move |_| flush_mgr.flush());
+
             // Clipboard change listener
             let cb_c = clipboard_mgr.clone();
             if let Some(display) = gdk::Display::default() {
                 let clipboard = display.clipboard();
                 clipboard.connect_changed(move |cb| {
                     let cb_c2 = cb_c.clone();
+                    let mimes: Vec<String> = cb.formats().mime_types().iter().map(|m| m.to_string()).collect();
                     cb.read_text_async(None::<&gio::Cancellable>, move |result| {
                         if let Ok(Some(text)) = result {
-                            cb_c2.record_clip(&text);
+                            cb_c2.record_clip_with_formats(&text, &mimes);
                         }
                     });
                 });
@@ -127,13 +139,20 @@ fn main() -> gtk4::glib::ExitCode {
             // The Shell extension can see pointer clicks outside our window (desktop,
             // other apps) that we can't; it reports them over D-Bus so we can route
             // them through the same hide path as focus-loss. See control_service.rs.
-            let hide_rx = crate::control_service::spawn();
-            let hide_win = spotlight_win.clone();
-            glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
-                while hide_rx.try_recv().is_ok() {
-                    hide_win.handle_outside_click();
-                }
-                glib::ControlFlow::Continue
+            HIDE_WIN.with(|h| *h.borrow_mut() = Some(spotlight_win.clone()));
+            crate::control_service::spawn(|| {
+                // Runs on the control thread: only wake the main loop, which then touches the widget.
+                glib::MainContext::default().invoke(|| {
+                    if let Some(win) = HIDE_WIN.with(|h| h.borrow().clone()) {
+                        win.handle_outside_click();
+                    }
+                });
+            }, |x, y| {
+                glib::MainContext::default().invoke(move || {
+                    if let Some(win) = HIDE_WIN.with(|h| h.borrow().clone()) {
+                        win.handle_global_pointer(x, y);
+                    }
+                });
             });
 
             *win_borrow = Some(spotlight_win);

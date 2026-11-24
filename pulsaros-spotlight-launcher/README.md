@@ -40,7 +40,8 @@ Type to search. `Enter` runs the first result. `Ctrl+K` shows more actions for t
 It also learns: type `ff` and pick Firefox once or twice, and `ff` keeps meaning Firefox.
 
 **Modes** narrow the search. Switch with `Tab` or `Alt+1..4`: Spotlight (everything), Applications,
-Files, Actions, Clipboard.
+Files, Actions, Clipboard. `Alt+1..4` jump to Applications, Files, Actions, Clipboard; `Tab` also
+cycles Docs, Images, Music, Videos, Windows, Snippets, Calc and Web (also in the chip row).
 
 **Personal touches:** give any result an alias, pin favorites, hide commands you never use
 (with undo), and press `↑` on an empty search to see your history.
