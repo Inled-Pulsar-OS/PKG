@@ -42,7 +42,14 @@ sync_accent() {
     fi
 
     local current_icon=$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d "'\"")
-    if [ "$current_icon" = "macOS-27-Icons" ] || [ "$current_icon" = "macOS-27" ]; then
+    # PulsarSymbols is the system icon theme. It inherits the macOS family, so
+    # keep it in settings.ini instead of replacing it with a bare MacTahoe name.
+    if [ -d "/usr/share/icons/PulsarSymbols" ] && \
+       { [ -z "$current_icon" ] || [ "$current_icon" = "PulsarSymbols" ] || \
+         [ "$current_icon" = "macOS-27-Icons" ] || [ "$current_icon" = "macOS-27" ] || \
+         [[ "$current_icon" == MacTahoe* ]]; }; then
+        icon_name="PulsarSymbols"
+    elif [ "$current_icon" = "macOS-27-Icons" ] || [ "$current_icon" = "macOS-27" ]; then
         icon_name="$current_icon"
     fi
 

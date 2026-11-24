@@ -990,6 +990,15 @@ on_icon_theme_selected_cb (CcBackgroundPanel *self)
   selected = adw_combo_row_get_selected (self->icon_theme_row);
   iface_settings = g_settings_new ("org.gnome.desktop.interface");
 
+  // PulsarSymbols is the Pulsar OS icon theme and inherits the selected macOS
+  // family. Keep it active; switching the base family must not discard the SF
+  // Symbols layer.
+  if (g_file_test ("/usr/share/icons/PulsarSymbols/index.theme", G_FILE_TEST_EXISTS))
+    {
+      g_settings_set_string (iface_settings, "icon-theme", "PulsarSymbols");
+      return;
+    }
+
   if (selected == 1)
     g_settings_set_string (iface_settings, "icon-theme", "macOS-27-Icons");
   else
