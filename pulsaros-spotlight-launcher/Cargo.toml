@@ -1,12 +1,12 @@
 [package]
 name = "pulsaros-spotlight"
-version = "2.0.35"
+version = "2.0.43"
 edition = "2021"
 authors = ["Jaime <info@inled.es>"]
 license = "GPL-3.0-or-later"
 
 [dependencies]
-gtk4 = { version = "0.9" }
+gtk4 = { version = "0.9", features = ["v4_12"] }
 adw = { version = "0.7", package = "libadwaita" }
 gdk-pixbuf = { version = "0.20" }
 zbus = { version = "4.4" }
@@ -17,5 +17,4 @@ dirs = "5.0"
 mime_guess = "2.0"
 urlencoding = "2.1"
 regex = "1.10"
-lazy_static = "1.4"
 libc = "0.2"

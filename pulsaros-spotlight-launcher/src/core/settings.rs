@@ -116,9 +116,6 @@ impl Settings {
     }
 
     // ---- disabled ----
-    pub fn disabled(&self) -> &[String] {
-        &self.data.disabled
-    }
     pub fn is_disabled(&self, id: &str) -> bool {
         self.data.disabled.iter().any(|d| d == id)
     }
@@ -150,9 +147,6 @@ impl Settings {
         self.history.retain(|h| !h.eq_ignore_ascii_case(q));
         self.history.insert(0, q.to_string());
         self.history.truncate(HISTORY_CAP);
-    }
-    pub fn clear_history(&mut self) {
-        self.history.clear();
     }
 }
 

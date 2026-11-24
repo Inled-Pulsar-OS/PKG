@@ -42,19 +42,11 @@ impl Snippets {
     /// Add a snippet and return its new id. Rejects empty name/text and a keyword used elsewhere.
     pub fn add(&mut self, name: &str, keyword: &str, text: &str) -> Result<String, String> {
         let (name, keyword) = (name.trim(), keyword.trim());
-        self.check(None, name, keyword, text)?;
+        self.check(name, keyword, text)?;
         let n = self.items.iter().filter_map(|s| s.id.strip_prefix('s')?.parse::<u64>().ok()).max().unwrap_or(0);
         let id = format!("s{}", n + 1);
         self.items.push(Snippet { id: id.clone(), name: name.into(), keyword: keyword.into(), text: text.into() });
         Ok(id)
-    }
-
-    pub fn update(&mut self, id: &str, name: &str, keyword: &str, text: &str) -> Result<(), String> {
-        let (name, keyword) = (name.trim(), keyword.trim());
-        self.check(Some(id), name, keyword, text)?;
-        let s = self.items.iter_mut().find(|s| s.id == id).ok_or("unknown snippet")?;
-        (s.name, s.keyword, s.text) = (name.into(), keyword.into(), text.into());
-        Ok(())
     }
 
     pub fn remove(&mut self, id: &str) -> bool {
@@ -63,12 +55,12 @@ impl Snippets {
         self.items.len() != n
     }
 
-    fn check(&self, id: Option<&str>, name: &str, keyword: &str, text: &str) -> Result<(), String> {
+    fn check(&self, name: &str, keyword: &str, text: &str) -> Result<(), String> {
         if name.is_empty() || text.is_empty() {
             return Err("name and text are required".into());
         }
         let dup = !keyword.is_empty()
-            && self.items.iter().any(|s| Some(s.id.as_str()) != id && s.keyword.eq_ignore_ascii_case(keyword));
+            && self.items.iter().any(|s| s.keyword.eq_ignore_ascii_case(keyword));
         if dup {
             return Err(format!("keyword \"{keyword}\" is already used"));
         }

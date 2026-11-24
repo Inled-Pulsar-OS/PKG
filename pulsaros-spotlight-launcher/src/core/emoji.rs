@@ -17,7 +17,6 @@ pub struct Emoji {
     pub ch: String,
     pub name: String,
     pub keywords: String,
-    pub group: String,
     /// Skin tone variants (empty when the emoji has none).
     pub variants: Vec<String>,
 }
@@ -34,8 +33,11 @@ fn parse_line(l: &str) -> Option<Emoji> {
         ch,
         name: f.next()?.to_string(),
         keywords: f.next().unwrap_or("").to_string(),
-        group: f.next().unwrap_or("").to_string(),
-        variants: f.next().unwrap_or("").split_whitespace().map(String::from).collect(),
+        // The TSV has a group column between the keywords and the variants; skip it.
+        variants: {
+            f.next();
+            f.next().unwrap_or("").split_whitespace().map(String::from).collect()
+        },
     })
 }
 

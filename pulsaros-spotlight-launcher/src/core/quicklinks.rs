@@ -61,6 +61,7 @@ impl Quicklinks {
     }
 
     /// `gh rust` -> the `gh` quicklink with query `rust`. Clipboard is empty.
+    #[cfg(test)]
     pub fn resolve(&self, input: &str) -> Option<Resolved> {
         self.resolve_with_clipboard(input, "")
     }

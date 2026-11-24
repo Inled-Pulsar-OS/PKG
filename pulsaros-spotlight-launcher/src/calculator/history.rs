@@ -91,6 +91,10 @@ impl CalcHistory {
         id
     }
 
+    pub fn get(&self, id: u64) -> Option<HistoryRow> {
+        self.rows.iter().find(|r| r.id == id).cloned()
+    }
+
     pub fn delete(&mut self, id: u64) -> bool {
         let before = self.rows.len();
         self.rows.retain(|r| r.id != id);
